@@ -8,6 +8,11 @@ dependencies = [
     "pydantic>=2.7",
     "anthropic>=0.57",
     "meter",
+    # supabase: T2 ingestion needs Storage (private "documents" bucket) and the
+    # documents table via the service-role key. Was already resolved transitively
+    # through `meter`; declared explicitly so the repos layer does not depend on a
+    # transitive pin.
+    "supabase>=2.0",
 ]
 
 # Meter (LLM cost/latency tracker) is installed as a git dependency pointing at
@@ -32,10 +37,11 @@ packages = ["app"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-# llm-marked tests hit the real Anthropic API; excluded from default runs.
-addopts = "-m 'not llm'"
+# llm/supabase-marked tests hit real external services; excluded from default runs.
+addopts = "-m 'not llm and not supabase'"
 markers = [
     "llm: smoke tests that call the real Anthropic API (run with: uv run pytest -m llm)",
+    "supabase: integration tests against a real Supabase project (run with: uv run pytest -m supabase)",
 ]
 
 [tool.ruff]
@@ -54,4 +60,10 @@ plugins = ["pydantic.mypy"]
 # rather than failing strict mode on the missing stubs.
 [[tool.mypy.overrides]]
 module = ["meter.*"]
+ignore_missing_imports = true
+
+# supabase and its sub-packages ship incomplete/untyped stubs; treat their
+# imports as untyped rather than failing strict mode.
+[[tool.mypy.overrides]]
+module = ["supabase.*", "storage3.*", "postgrest.*"]
 ignore_missing_imports = true

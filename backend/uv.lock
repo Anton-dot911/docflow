@@ -312,6 +312,7 @@ dependencies = [
     { name = "fastapi", extra = ["standard"] },
     { name = "meter" },
     { name = "pydantic" },
+    { name = "supabase" },
 ]
 
 [package.dev-dependencies]
@@ -328,6 +329,7 @@ requires-dist = [
     { name = "fastapi", extras = ["standard"], specifier = ">=0.115" },
     { name = "meter", git = "https://github.com/anton-dot911/meter?subdirectory=packages%2Fmeter-py&branch=main" },
     { name = "pydantic", specifier = ">=2.7" },
+    { name = "supabase", specifier = ">=2.0" },
 ]
 
 [package.metadata.requires-dev]

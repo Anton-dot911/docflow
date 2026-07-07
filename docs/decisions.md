@@ -1,5 +1,53 @@
 # Design decisions
 
+## Ingestion (T2)
+
+### Placeholder user_id (auth out of scope)
+Auth is not part of T2. `documents.user_id` is `uuid NOT NULL`, so ingestion
+writes every row under a fixed placeholder UUID
+`00000000-0000-0000-0000-000000000000` (`app.config.PLACEHOLDER_USER_ID`), also
+used as the first Storage path segment. When real auth lands, this constant is
+replaced by the authenticated user's id and the RLS `user_id = auth.uid()`
+policy (already defined in migration 001) starts doing real work. The service
+role key used by the repos layer bypasses RLS, which is why inserts succeed
+today.
+
+### Batch semantics: all-or-nothing (keeps the response contract verbatim)
+The API contract in `docs/PLAN.md` is `POST /api/documents -> [{document_id,
+status}]`. The task also requires "clear 4xx errors and per-file results" on
+invalid input. To honour the success contract exactly while still reporting
+per-file detail, a batch is **all-or-nothing**: every file is validated first;
+if any file fails, the whole request is rejected with `422` and a body
+`{message, results:[{filename, accepted, error}]}` and **nothing is stored** —
+so the `2xx` body is always the documented `[{document_id, status}]` with no
+rejected/`null` entries mixed in. A wrong number of files (outside 1..10) is a
+request-level error → `400`. This interpretation does not change the contract;
+if partial-success (per-file `207`-style) is wanted later, that is a contract
+change to be raised explicitly.
+
+### File-type validation by magic bytes
+Accepted types (pdf/jpg/png) are decided from leading-byte signatures
+(`app/services/filetypes.py`), not the extension or the client-supplied MIME
+header, so a renamed `.exe -> .pdf` (PE `MZ` header) is rejected. Size limit is
+10 MB/file, enforced on the read content length.
+
+### Private Storage bucket, created programmatically
+The `documents` bucket is created on demand via the service-role key with
+`public=False` (`StorageRepo.ensure_bucket`, idempotent). Files live at
+`{user_id}/{document_id}/{filename}`.
+
+### Background status stub
+`documents.status` walks `queued -> processing -> review` via a FastAPI
+background task (`_run_status_stub`) with a configurable delay
+(`INGESTION_STUB_DELAY_SECONDS`, default 1s; tests use 0). This exercises the
+status flow end-to-end; T3+ replaces the stub with real preprocessing.
+
+### supabase declared as a direct dependency
+`supabase` was already resolved transitively through `meter`; T2 declares it
+explicitly in `pyproject.toml` so the repos layer does not rely on a transitive
+pin. Its sub-packages ship incomplete type stubs, so `supabase.*`, `storage3.*`,
+and `postgrest.*` are marked `ignore_missing_imports` for mypy strict.
+
 ## Scaffolder friction (T7)
 
 Generated with `npx github:Anton-dot911/Project-Scaffolder` (`antlab-create`):
