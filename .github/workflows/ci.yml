@@ -28,7 +28,11 @@ jobs:
         working-directory: frontend
     steps:
       - uses: actions/checkout@v4
+      # working-directory defaults don't apply to `uses:` steps, so point
+      # action-setup at frontend/package.json to read `packageManager`.
       - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: frontend/package.json
       - uses: actions/setup-node@v4
         with:
           node-version: 22
