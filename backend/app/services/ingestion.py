@@ -87,9 +87,7 @@ def _validate(payload: UploadFilePayload) -> tuple[FileResult, str | None]:
     return FileResult(filename=filename, accepted=True), file_type
 
 
-def _run_status_stub(
-    documents: DocumentsRepo, document_id: UUID, delay: float
-) -> None:
+def _run_status_stub(documents: DocumentsRepo, document_id: UUID, delay: float) -> None:
     """Placeholder worker: queued -> processing -> (delay) -> review.
 
     Replaced by the real preprocess/classify/extract pipeline in T3+.

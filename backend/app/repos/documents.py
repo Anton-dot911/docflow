@@ -44,9 +44,7 @@ class DocumentsRepo:
 
     def set_status(self, *, document_id: UUID, status: str) -> None:
         """Transition a document to a new status (used by the stub worker)."""
-        self._client.table(_TABLE).update({"status": status}).eq(
-            "id", str(document_id)
-        ).execute()
+        self._client.table(_TABLE).update({"status": status}).eq("id", str(document_id)).execute()
 
     def list_for_user(
         self,
@@ -64,11 +62,7 @@ class DocumentsRepo:
         )
         if status is not None:
             query = query.eq("status", status)
-        result = (
-            query.order("created_at", desc=True)
-            .range(offset, offset + limit - 1)
-            .execute()
-        )
+        result = query.order("created_at", desc=True).range(offset, offset + limit - 1).execute()
         rows = cast(list[dict[str, Any]], result.data)
         total = result.count if result.count is not None else len(rows)
         return rows, total

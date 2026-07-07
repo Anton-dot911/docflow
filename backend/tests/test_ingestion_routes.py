@@ -155,9 +155,7 @@ def test_rejects_more_than_ten_files(
     documents.create.assert_not_called()
 
 
-def test_list_documents_returns_paged_items(
-    client: TestClient, documents: MagicMock
-) -> None:
+def test_list_documents_returns_paged_items(client: TestClient, documents: MagicMock) -> None:
     rows: list[dict[str, Any]] = [
         {
             "id": "11111111-1111-1111-1111-111111111111",

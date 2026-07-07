@@ -28,8 +28,7 @@ class StorageRepo:
         loses the race raises a "already exists" error, which we swallow.
         """
         existing = {
-            getattr(b, "id", None) or getattr(b, "name", None)
-            for b in self._list_buckets()
+            getattr(b, "id", None) or getattr(b, "name", None) for b in self._list_buckets()
         }
         if self._bucket in existing:
             return

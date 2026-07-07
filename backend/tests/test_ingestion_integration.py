@@ -47,9 +47,7 @@ def test_ingest_creates_row_and_storage_object(monkeypatch: pytest.MonkeyPatch) 
     background = BackgroundTasks()
 
     filename = f"integration-{uuid.uuid4().hex[:8]}.png"
-    created = service.ingest(
-        [UploadFilePayload(filename=filename, content=PNG_1X1)], background
-    )
+    created = service.ingest([UploadFilePayload(filename=filename, content=PNG_1X1)], background)
     assert len(created) == 1
     document_id = created[0].document_id
     assert created[0].status.value == "queued"
@@ -75,9 +73,7 @@ def test_ingest_creates_row_and_storage_object(monkeypatch: pytest.MonkeyPatch) 
         assert row["user_id"] == str(PLACEHOLDER_USER_ID)
 
         # Storage object present under the document's folder.
-        objects = client.storage.from_(STORAGE_BUCKET).list(
-            f"{PLACEHOLDER_USER_ID}/{document_id}"
-        )
+        objects = client.storage.from_(STORAGE_BUCKET).list(f"{PLACEHOLDER_USER_ID}/{document_id}")
         names = [o["name"] for o in objects]
         assert filename in names
 
