@@ -20,6 +20,7 @@ from fastapi.testclient import TestClient
 
 import app.services.ingestion as ingestion
 from app.main import app
+from app.models.preprocess import PreprocessedDoc
 from app.routes.documents import get_documents_repo, get_storage_repo
 from app.services.ingestion import BatchSizeError, IngestionService
 
@@ -29,10 +30,17 @@ JPEG = b"\xff\xd8\xff\xe0\x00\x10JFIF" + b"\x00" * 16
 
 
 @pytest.fixture(autouse=True)
-def _no_stub_delay(monkeypatch: pytest.MonkeyPatch) -> None:
-    # Keep the queued->processing->review stub instant so TestClient's
-    # synchronous background-task execution does not sleep.
-    monkeypatch.setattr(ingestion, "STATUS_STUB_DELAY_SECONDS", 0.0)
+def _stub_preprocess(monkeypatch: pytest.MonkeyPatch) -> None:
+    # These ingestion tests exercise the HTTP/validation/storage wiring, not
+    # real preprocessing (that has its own suite on decodable fixtures). The
+    # magic-header-only test bytes above are not decodable, so stub preprocess
+    # with a canned vision result; the background task runs synchronously under
+    # TestClient.
+    monkeypatch.setattr(
+        ingestion,
+        "preprocess",
+        lambda content: PreprocessedDoc(mode="vision", images=[b"png"], pages=1),
+    )
 
 
 @pytest.fixture
@@ -85,9 +93,13 @@ def test_happy_path_creates_row_stores_file_and_reaches_review(
     documents.create.assert_called_once()
     assert documents.create.call_args.kwargs["filename"] == "invoice.png"
 
-    # Background stub walked the status: processing then review.
+    # Background worker set processing, then persisted preprocessing + review.
     statuses = [c.kwargs["status"] for c in documents.set_status.call_args_list]
-    assert statuses == ["processing", "review"]
+    assert statuses == ["processing"]
+    documents.mark_reviewable.assert_called_once()
+    assert documents.mark_reviewable.call_args.kwargs["mode"] == "vision"
+    assert documents.mark_reviewable.call_args.kwargs["pages"] == 1
+    documents.mark_failed.assert_not_called()
 
 
 def test_multiple_files_accepted(

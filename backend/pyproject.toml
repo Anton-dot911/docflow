@@ -8,6 +8,12 @@ dependencies = [
     "pydantic>=2.7",
     "anthropic>=0.57",
     "meter",
+    # pypdfium2: T3 preprocessing extracts text from PDFs and rasterizes scanned
+    # pages to PNG (PDFium bindings — no system poppler needed, permissive
+    # BSD/Apache licence). Pillow: resize rasterized/uploaded images to the
+    # 1568px long-side constraint and encode PNGs.
+    "pypdfium2>=4.30",
+    "pillow>=10.4",
     # supabase: T2 ingestion needs Storage (private "documents" bucket) and the
     # documents table via the service-role key. Was already resolved transitively
     # through `meter`; declared explicitly so the repos layer does not depend on a
@@ -66,4 +72,9 @@ ignore_missing_imports = true
 # imports as untyped rather than failing strict mode.
 [[tool.mypy.overrides]]
 module = ["supabase.*", "storage3.*", "postgrest.*"]
+ignore_missing_imports = true
+
+# pypdfium2 (T3 preprocessing) ships no py.typed marker; treat as untyped.
+[[tool.mypy.overrides]]
+module = ["pypdfium2.*"]
 ignore_missing_imports = true

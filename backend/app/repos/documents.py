@@ -43,8 +43,23 @@ class DocumentsRepo:
         return cast(dict[str, Any], result.data[0])
 
     def set_status(self, *, document_id: UUID, status: str) -> None:
-        """Transition a document to a new status (used by the stub worker)."""
+        """Transition a document to a new status."""
         self._client.table(_TABLE).update({"status": status}).eq("id", str(document_id)).execute()
+
+    def mark_reviewable(self, *, document_id: UUID, mode: str, pages: int) -> None:
+        """Persist preprocessing outputs and advance the document to `review`.
+
+        Writes `mode`/`pages` and `status='review'` in one update (T3).
+        """
+        self._client.table(_TABLE).update({"mode": mode, "pages": pages, "status": "review"}).eq(
+            "id", str(document_id)
+        ).execute()
+
+    def mark_failed(self, *, document_id: UUID, error: str) -> None:
+        """Record a processing failure: `status='failed'` with an error message."""
+        self._client.table(_TABLE).update({"status": "failed", "error": error}).eq(
+            "id", str(document_id)
+        ).execute()
 
     def list_for_user(
         self,

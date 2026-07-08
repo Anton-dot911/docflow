@@ -7,7 +7,6 @@ are defined here so routes, services, and tests share a single source of truth.
 
 from __future__ import annotations
 
-import os
 from uuid import UUID
 
 # --- Upload validation (T2) -------------------------------------------------
@@ -28,9 +27,3 @@ STORAGE_BUCKET = "documents"
 # document is owned by this fixed user_id so the documents.user_id NOT NULL /
 # uuid column is satisfied and the RLS predicate has something to key on.
 PLACEHOLDER_USER_ID = UUID("00000000-0000-0000-0000-000000000000")
-
-# --- Background status stub (T2) --------------------------------------------
-# The stub worker moves a document queued -> processing -> review with this
-# delay in between so the status flow is exercised end-to-end before real
-# processing (T3+) exists. Overridable via env; tests set it to 0 for speed.
-STATUS_STUB_DELAY_SECONDS = float(os.environ.get("INGESTION_STUB_DELAY_SECONDS", "1.0"))

@@ -2,8 +2,8 @@
 
 Validates an upload batch (count, magic-byte type, size), stores accepted files
 in Supabase Storage, creates queued `documents` rows, and schedules a background
-stub that walks each document queued -> processing -> review so the status flow
-is exercised end-to-end before real processing (T3+) replaces the stub.
+task that runs real preprocessing (T3): queued -> processing -> preprocess ->
+review (or failed). Classification/extraction (T4+) slot in before `review`.
 
 Batch semantics: partial success. Valid files are accepted (stored + queued);
 invalid files are rejected individually with a machine-readable reason, and the
@@ -14,7 +14,6 @@ zero files, or more than the 1..10 allowed. See docs/decisions.md.
 
 from __future__ import annotations
 
-import time
 from dataclasses import dataclass
 from uuid import UUID, uuid4
 
@@ -25,7 +24,6 @@ from app.config import (
     MAX_FILES_PER_REQUEST,
     MIN_FILES_PER_REQUEST,
     PLACEHOLDER_USER_ID,
-    STATUS_STUB_DELAY_SECONDS,
 )
 from app.models.document import (
     DocStatus,
@@ -36,6 +34,7 @@ from app.models.document import (
 from app.repos.documents import DocumentsRepo
 from app.repos.storage import StorageRepo, build_storage_path
 from app.services.filetypes import content_type_for, sniff_type
+from app.services.preprocess import preprocess
 
 
 class BatchSizeError(Exception):
@@ -81,15 +80,26 @@ def _validate(payload: UploadFilePayload) -> _Validated:
     return _Validated(filename, file_type, None)
 
 
-def _run_status_stub(documents: DocumentsRepo, document_id: UUID, delay: float) -> None:
-    """Placeholder worker: queued -> processing -> (delay) -> review.
+def _run_preprocess(documents: DocumentsRepo, document_id: UUID, content: bytes) -> None:
+    """Background worker: queued -> processing -> preprocess -> review (or failed).
 
-    Replaced by the real preprocess/classify/extract pipeline in T3+.
+    Runs real preprocessing (T3): mark the row `processing`, turn the uploaded
+    bytes into a `PreprocessedDoc`, then persist `mode`/`pages` and advance to
+    `review`. Any preprocessing error moves the row to `failed` with the message
+    instead of leaving it stuck in `processing`. Classification/extraction (T4+)
+    slot in between preprocess and `review` later.
+
+    The already-read upload bytes are handed in directly rather than re-fetched
+    from Storage: FastAPI BackgroundTasks run in-process right after the response,
+    so the content is still in memory (see docs/decisions.md).
     """
     documents.set_status(document_id=document_id, status=DocStatus.processing.value)
-    if delay > 0:
-        time.sleep(delay)
-    documents.set_status(document_id=document_id, status=DocStatus.review.value)
+    try:
+        result = preprocess(content)
+    except Exception as error:  # any failure must not strand the row in processing
+        documents.mark_failed(document_id=document_id, error=str(error))
+        return
+    documents.mark_reviewable(document_id=document_id, mode=result.mode, pages=result.pages)
 
 
 class IngestionService:
@@ -148,10 +158,10 @@ class IngestionService:
                 storage_path=storage_path,
             )
             background_tasks.add_task(
-                _run_status_stub,
+                _run_preprocess,
                 self._documents,
                 document_id,
-                STATUS_STUB_DELAY_SECONDS,
+                payload.content,
             )
             results.append(
                 UploadItemResult(
