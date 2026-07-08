@@ -1,8 +1,10 @@
 """Metered Anthropic client wrapper with structured (tool-use) outputs.
 
-Mirror of the TS contract in the antlab shared conventions: create_llm(project,
-component) returns an Llm whose structured() forces a tool call shaped by a
-Pydantic model, validates the result, and retries once with error feedback.
+create_llm(project, component) returns an Llm whose call_structured() loads a
+prompt file, forces a tool call shaped by a Pydantic model, validates the
+result with that same model, and retries once with the validation error fed
+back to the model. Every request goes through the Meter wrapper so cost and
+latency land in the shared Supabase ``llm_calls`` table.
 """
 
 from __future__ import annotations
@@ -11,12 +13,16 @@ import json
 import os
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeVar
 
 import anthropic
 from anthropic.types import MessageParam, ToolParam, ToolUseBlock
 from meter import metered_client
 from pydantic import BaseModel, ValidationError
+
+# Output models are supplied by callers; the TypeVar keeps call_structured's
+# return type tied to the passed output_model instead of collapsing to BaseModel.
+OutputModelT = TypeVar("OutputModelT", bound=BaseModel)
 
 # Fallback chain mirrors the TS contract: explicit arg > LLM_MODEL env > default.
 DEFAULT_MODEL = "claude-sonnet-4-6"
@@ -49,17 +55,32 @@ class Llm:
             component=component,
         )
 
-    def structured(
+    def call_structured(
         self,
-        *,
+        model: str | None,
         prompt_file: str,
-        output_model: type[BaseModel],
         input: Any,
-        model: str | None = None,
-        temperature: float = 0,
-    ) -> BaseModel:
+        output_model: type[OutputModelT],
+        *,
+        temperature: float = 0.0,
+    ) -> OutputModelT:
+        """Run one structured (tool-use) call and return a validated output_model.
+
+        model: explicit model id, or None to resolve from LLM_MODEL / the default.
+        prompt_file: "prompts/<name>.v<N>.md", read as the system prompt.
+        input: str used verbatim, else JSON-encoded as the user message.
+        output_model: Pydantic model shaping the tool schema and validating the
+        response; on validation failure exactly one retry runs with the error
+        appended. Raises FileNotFoundError if the prompt file is missing (before
+        any API call) and LlmError if the output is still invalid after the retry.
+        """
         resolved_model = model or os.environ.get("LLM_MODEL") or DEFAULT_MODEL
-        system_prompt = (PROJECT_ROOT / prompt_file).read_text(encoding="utf-8")
+        prompt_path = PROJECT_ROOT / prompt_file
+        if not prompt_path.is_file():
+            raise FileNotFoundError(
+                f"prompt file not found: {prompt_file} (looked under {PROJECT_ROOT})"
+            )
+        system_prompt = prompt_path.read_text(encoding="utf-8")
         user_content = input if isinstance(input, str) else json.dumps(input, default=str)
 
         tool: ToolParam = {
