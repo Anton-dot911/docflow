@@ -1,9 +1,11 @@
 """Unit tests for POST/GET /api/documents with Storage and DB mocked.
 
-Covers rejection (oversize, wrong type incl. renamed .exe->.pdf, >10 files) and
-the happy path (row created, file stored, status reaches review via the stub).
-Storage/DB are MagicMocks injected through FastAPI dependency overrides so no
-network or real Supabase is touched.
+Covers partial-success ingestion: per-file rejection (oversize, wrong type incl.
+renamed .exe->.pdf), a mixed batch that stores the good files and rejects the
+bad one, the request-level hard fail (>10 files / 0 files), and the happy path
+(row created, file stored, status reaches review via the stub). Storage/DB are
+MagicMocks injected through FastAPI dependency overrides so no network or real
+Supabase is touched.
 """
 
 from __future__ import annotations
@@ -13,11 +15,13 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
+from fastapi import BackgroundTasks
 from fastapi.testclient import TestClient
 
 import app.services.ingestion as ingestion
 from app.main import app
 from app.routes.documents import get_documents_repo, get_storage_repo
+from app.services.ingestion import BatchSizeError, IngestionService
 
 PNG = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR" + b"\x00" * 32
 PDF = b"%PDF-1.7\n%%EOF"
@@ -62,10 +66,11 @@ def test_happy_path_creates_row_stores_file_and_reaches_review(
 ) -> None:
     response = client.post("/api/documents", files=_files(("invoice.png", PNG)))
 
-    assert response.status_code == 201
+    assert response.status_code == 200
     body = response.json()
     assert len(body) == 1
     assert body[0]["status"] == "queued"
+    assert body[0]["reason"] is None
     document_id = body[0]["document_id"]
 
     # Bucket ensured + file uploaded to {user_id}/{document_id}/{filename}.
@@ -92,23 +97,25 @@ def test_multiple_files_accepted(
         "/api/documents",
         files=_files(("a.pdf", PDF), ("b.jpg", JPEG), ("c.png", PNG)),
     )
-    assert response.status_code == 201
-    assert len(response.json()) == 3
+    assert response.status_code == 200
+    body = response.json()
+    assert [item["status"] for item in body] == ["queued", "queued", "queued"]
     assert storage.upload.call_count == 3
     assert documents.create.call_count == 3
 
 
-def test_rejects_oversized_file(
+def test_rejects_oversized_file_individually(
     client: TestClient, storage: MagicMock, documents: MagicMock
 ) -> None:
     big = PNG + b"\x00" * (10 * 1024 * 1024 + 1)
     response = client.post("/api/documents", files=_files(("big.png", big)))
 
-    assert response.status_code == 422
-    detail = response.json()["detail"]
-    assert detail["results"][0]["accepted"] is False
-    assert "limit" in detail["results"][0]["error"]
-    # All-or-nothing: nothing stored or created.
+    # Valid count (1 file) -> processed as partial success, not a hard fail.
+    assert response.status_code == 200
+    item = response.json()[0]
+    assert item["status"] == "rejected"
+    assert item["reason"] == "too_large"
+    assert item["document_id"] is None
     storage.upload.assert_not_called()
     documents.create.assert_not_called()
 
@@ -119,27 +126,39 @@ def test_rejects_wrong_type_renamed_exe_as_pdf(
     exe = b"MZ\x90\x00" + b"\x00" * 64
     response = client.post("/api/documents", files=_files(("malware.pdf", exe)))
 
-    assert response.status_code == 422
-    detail = response.json()["detail"]
-    assert detail["results"][0]["accepted"] is False
-    assert "unsupported file type" in detail["results"][0]["error"]
+    assert response.status_code == 200
+    item = response.json()[0]
+    assert item["status"] == "rejected"
+    assert item["reason"] == "bad_type"
+    assert item["document_id"] is None
     storage.upload.assert_not_called()
     documents.create.assert_not_called()
 
 
-def test_mixed_batch_is_all_or_nothing(
+def test_mixed_batch_stores_good_and_rejects_bad(
     client: TestClient, storage: MagicMock, documents: MagicMock
 ) -> None:
-    # One good file, one bad: the whole batch is rejected, nothing stored.
+    # 2 good + 1 bad -> 2 stored, 1 rejected; results are in input order.
     response = client.post(
         "/api/documents",
-        files=_files(("good.pdf", PDF), ("bad.pdf", b"MZ" + b"\x00" * 20)),
+        files=_files(
+            ("good1.pdf", PDF),
+            ("bad.pdf", b"MZ" + b"\x00" * 20),
+            ("good2.png", PNG),
+        ),
     )
-    assert response.status_code == 422
-    results = response.json()["detail"]["results"]
-    assert [r["accepted"] for r in results] == [True, False]
-    storage.upload.assert_not_called()
-    documents.create.assert_not_called()
+    assert response.status_code == 200
+    body = response.json()
+    assert [item["status"] for item in body] == ["queued", "rejected", "queued"]
+    assert body[0]["filename"] == "good1.pdf"
+    assert body[0]["document_id"] is not None
+    assert body[1]["filename"] == "bad.pdf"
+    assert body[1]["reason"] == "bad_type"
+    assert body[1]["document_id"] is None
+    assert body[2]["document_id"] is not None
+    # Only the two good files were stored / rowed.
+    assert storage.upload.call_count == 2
+    assert documents.create.call_count == 2
 
 
 def test_rejects_more_than_ten_files(
@@ -149,10 +168,20 @@ def test_rejects_more_than_ten_files(
         "/api/documents",
         files=_files(*[(f"f{i}.png", PNG) for i in range(11)]),
     )
+    # Malformed request -> hard fail, nothing processed.
     assert response.status_code == 400
-    assert "1..10" in response.json()["detail"]
+    detail = response.json()["detail"]
+    assert detail["reason"] == "too_many_files"
     storage.upload.assert_not_called()
     documents.create.assert_not_called()
+
+
+def test_zero_files_hard_fails_at_service() -> None:
+    # The service guards the empty-batch case with reason no_files.
+    service = IngestionService(storage=MagicMock(), documents=MagicMock())
+    with pytest.raises(BatchSizeError) as excinfo:
+        service.ingest([], BackgroundTasks())
+    assert excinfo.value.reason.value == "no_files"
 
 
 def test_list_documents_returns_paged_items(client: TestClient, documents: MagicMock) -> None:

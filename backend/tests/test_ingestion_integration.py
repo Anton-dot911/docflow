@@ -49,8 +49,9 @@ def test_ingest_creates_row_and_storage_object(monkeypatch: pytest.MonkeyPatch) 
     filename = f"integration-{uuid.uuid4().hex[:8]}.png"
     created = service.ingest([UploadFilePayload(filename=filename, content=PNG_1X1)], background)
     assert len(created) == 1
-    document_id = created[0].document_id
     assert created[0].status.value == "queued"
+    document_id = created[0].document_id
+    assert document_id is not None
 
     # Run the queued->processing->review stub the endpoint would run in the bg.
     for task in background.tasks:

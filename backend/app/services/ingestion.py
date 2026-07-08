@@ -5,11 +5,11 @@ in Supabase Storage, creates queued `documents` rows, and schedules a background
 stub that walks each document queued -> processing -> review so the status flow
 is exercised end-to-end before real processing (T3+) replaces the stub.
 
-Batch semantics: all-or-nothing. If any file fails validation the whole request
-is rejected with a 4xx carrying per-file results and nothing is stored; this
-keeps the documented success response verbatim `[{document_id, status}]`
-(docs/PLAN.md) rather than mixing accepted/rejected entries into it. See
-docs/decisions.md.
+Batch semantics: partial success. Valid files are accepted (stored + queued);
+invalid files are rejected individually with a machine-readable reason, and the
+response reports one entry per input file in order. The whole request only
+hard-fails (raising BatchSizeError -> 400) when the request itself is malformed:
+zero files, or more than the 1..10 allowed. See docs/decisions.md.
 """
 
 from __future__ import annotations
@@ -27,22 +27,23 @@ from app.config import (
     PLACEHOLDER_USER_ID,
     STATUS_STUB_DELAY_SECONDS,
 )
-from app.models.document import DocStatus, DocumentCreated, FileResult
+from app.models.document import (
+    DocStatus,
+    UploadItemResult,
+    UploadItemStatus,
+    UploadReason,
+)
 from app.repos.documents import DocumentsRepo
 from app.repos.storage import StorageRepo, build_storage_path
 from app.services.filetypes import content_type_for, sniff_type
 
 
 class BatchSizeError(Exception):
-    """The number of files is outside the allowed 1..10 range."""
+    """The request is malformed: the file count is outside the allowed range."""
 
-
-class FilesRejectedError(Exception):
-    """One or more files failed per-file validation; nothing was stored."""
-
-    def __init__(self, results: list[FileResult]) -> None:
-        self.results = results
-        super().__init__("one or more files were rejected")
+    def __init__(self, reason: UploadReason, message: str) -> None:
+        self.reason = reason
+        super().__init__(message)
 
 
 @dataclass(frozen=True)
@@ -53,38 +54,31 @@ class UploadFilePayload:
     content: bytes
 
 
+@dataclass(frozen=True)
+class _Validated:
+    """Outcome of validating one file. `file_type` is None iff rejected."""
+
+    filename: str
+    file_type: str | None
+    reason: UploadReason | None
+
+
 def _safe_filename(raw: str | None) -> str:
     """Reduce a client filename to a single safe path segment."""
     candidate = (raw or "").replace("\\", "/").split("/")[-1].strip()
     return candidate or "file"
 
 
-def _validate(payload: UploadFilePayload) -> tuple[FileResult, str | None]:
-    """Validate one file. Returns (result, sniffed_type). type is None if rejected."""
+def _validate(payload: UploadFilePayload) -> _Validated:
+    """Validate one file by size then magic bytes."""
     filename = _safe_filename(payload.filename)
-    size = len(payload.content)
-    if size == 0:
-        return FileResult(filename=filename, accepted=False, error="file is empty"), None
-    if size > MAX_FILE_SIZE_BYTES:
-        return (
-            FileResult(
-                filename=filename,
-                accepted=False,
-                error=f"file exceeds the {MAX_FILE_SIZE_BYTES} byte limit ({size} bytes)",
-            ),
-            None,
-        )
+    if len(payload.content) > MAX_FILE_SIZE_BYTES:
+        return _Validated(filename, None, UploadReason.too_large)
     file_type = sniff_type(payload.content)
     if file_type is None:
-        return (
-            FileResult(
-                filename=filename,
-                accepted=False,
-                error="unsupported file type; only pdf, jpg, png are allowed",
-            ),
-            None,
-        )
-    return FileResult(filename=filename, accepted=True), file_type
+        # Covers unknown signatures and empty files (nothing to sniff).
+        return _Validated(filename, None, UploadReason.bad_type)
+    return _Validated(filename, file_type, None)
 
 
 def _run_status_stub(documents: DocumentsRepo, document_id: UUID, delay: float) -> None:
@@ -109,36 +103,48 @@ class IngestionService:
         background_tasks: BackgroundTasks,
         *,
         user_id: UUID = PLACEHOLDER_USER_ID,
-    ) -> list[DocumentCreated]:
-        if not (MIN_FILES_PER_REQUEST <= len(payloads) <= MAX_FILES_PER_REQUEST):
+    ) -> list[UploadItemResult]:
+        count = len(payloads)
+        if count < MIN_FILES_PER_REQUEST:
+            raise BatchSizeError(UploadReason.no_files, "no files were uploaded")
+        if count > MAX_FILES_PER_REQUEST:
             raise BatchSizeError(
-                f"expected {MIN_FILES_PER_REQUEST}..{MAX_FILES_PER_REQUEST} files, "
-                f"got {len(payloads)}"
+                UploadReason.too_many_files,
+                f"too many files: {count} (max {MAX_FILES_PER_REQUEST})",
             )
 
-        validations = [_validate(p) for p in payloads]
-        if any(not result.accepted for result, _ in validations):
-            raise FilesRejectedError([result for result, _ in validations])
+        results: list[UploadItemResult] = []
+        bucket_ready = False
+        for payload in payloads:
+            validated = _validate(payload)
+            if validated.file_type is None:
+                results.append(
+                    UploadItemResult(
+                        filename=validated.filename,
+                        status=UploadItemStatus.rejected,
+                        reason=validated.reason,
+                    )
+                )
+                continue
 
-        # All valid: make sure the private bucket exists, then store each file
-        # and create its queued row.
-        self._storage.ensure_bucket()
-        created: list[DocumentCreated] = []
-        for payload, (result, file_type) in zip(payloads, validations, strict=True):
-            assert file_type is not None  # guaranteed by the all-accepted check above
+            # Create the bucket lazily, only once we have a file to store.
+            if not bucket_ready:
+                self._storage.ensure_bucket()
+                bucket_ready = True
+
             document_id = uuid4()
             storage_path = build_storage_path(
-                user_id=user_id, document_id=document_id, filename=result.filename
+                user_id=user_id, document_id=document_id, filename=validated.filename
             )
             self._storage.upload(
                 path=storage_path,
                 data=payload.content,
-                content_type=content_type_for(file_type),
+                content_type=content_type_for(validated.file_type),
             )
             row = self._documents.create(
                 document_id=document_id,
                 user_id=user_id,
-                filename=result.filename,
+                filename=validated.filename,
                 storage_path=storage_path,
             )
             background_tasks.add_task(
@@ -147,7 +153,11 @@ class IngestionService:
                 document_id,
                 STATUS_STUB_DELAY_SECONDS,
             )
-            created.append(
-                DocumentCreated(document_id=document_id, status=DocStatus(row["status"]))
+            results.append(
+                UploadItemResult(
+                    filename=validated.filename,
+                    status=UploadItemStatus(row["status"]),
+                    document_id=document_id,
+                )
             )
-        return created
+        return results

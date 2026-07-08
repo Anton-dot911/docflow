@@ -22,17 +22,16 @@ from fastapi import (
 
 from app.config import PLACEHOLDER_USER_ID
 from app.models.document import (
+    BatchError,
     DocStatus,
-    DocumentCreated,
     DocumentListItem,
     DocumentListResponse,
-    RejectionDetail,
+    UploadItemResult,
 )
 from app.repos.documents import DocumentsRepo
 from app.repos.storage import StorageRepo
 from app.services.ingestion import (
     BatchSizeError,
-    FilesRejectedError,
     IngestionService,
     UploadFilePayload,
 )
@@ -57,27 +56,27 @@ def get_ingestion_service(
 
 @router.post(
     "",
-    status_code=status.HTTP_201_CREATED,
-    response_model=list[DocumentCreated],
-    responses={422: {"model": RejectionDetail}},
+    response_model=list[UploadItemResult],
+    responses={400: {"model": BatchError}},
 )
 async def upload_documents(
     background_tasks: BackgroundTasks,
     service: Annotated[IngestionService, Depends(get_ingestion_service)],
     files: Annotated[list[UploadFile], File(description="1..10 files (pdf/jpg/png, <=10MB)")],
-) -> list[DocumentCreated]:
+) -> list[UploadItemResult]:
+    """Accept valid files, reject invalid ones individually (partial success).
+
+    Returns one result per input file. The request only hard-fails (400) when
+    it is itself malformed: zero files or more than 10.
+    """
     payloads = [
         UploadFilePayload(filename=f.filename or "file", content=await f.read()) for f in files
     ]
     try:
         return service.ingest(payloads, background_tasks)
     except BatchSizeError as error:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
-    except FilesRejectedError as error:
-        detail = RejectionDetail(message=str(error), results=error.results)
-        raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_CONTENT, detail=detail.model_dump()
-        ) from error
+        detail = BatchError(message=str(error), reason=error.reason)
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=detail.model_dump()) from error
 
 
 @router.get("", response_model=DocumentListResponse)

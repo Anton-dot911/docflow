@@ -12,18 +12,29 @@ policy (already defined in migration 001) starts doing real work. The service
 role key used by the repos layer bypasses RLS, which is why inserts succeed
 today.
 
-### Batch semantics: all-or-nothing (keeps the response contract verbatim)
-The API contract in `docs/PLAN.md` is `POST /api/documents -> [{document_id,
-status}]`. The task also requires "clear 4xx errors and per-file results" on
-invalid input. To honour the success contract exactly while still reporting
-per-file detail, a batch is **all-or-nothing**: every file is validated first;
-if any file fails, the whole request is rejected with `422` and a body
-`{message, results:[{filename, accepted, error}]}` and **nothing is stored** —
-so the `2xx` body is always the documented `[{document_id, status}]` with no
-rejected/`null` entries mixed in. A wrong number of files (outside 1..10) is a
-request-level error → `400`. This interpretation does not change the contract;
-if partial-success (per-file `207`-style) is wanted later, that is a contract
-change to be raised explicitly.
+### Batch semantics: partial success
+A batch accepts the valid files and rejects the invalid ones **individually**,
+rather than all-or-nothing. `POST /api/documents` returns `200` with one entry
+per input file, in order:
+`[{filename, status, document_id?, reason?}]`
+
+- **accepted** → `status:"queued"` + `document_id` (file stored, row created,
+  status stub scheduled).
+- **rejected** → `status:"rejected"` + machine-readable `reason`
+  (`too_large` | `bad_type`); the file is not stored and has no row.
+
+The request only **hard-fails** with `400` when the request itself is
+malformed — zero files (`reason:"no_files"`) or more than 10
+(`reason:"too_many_files"`); body is `{message, reason}`. A `400` means nothing
+was processed.
+
+This extends the `docs/PLAN.md` shape (`[{document_id, status}]`) with
+`filename`/`reason` and a response-only `rejected` status. It was chosen
+deliberately over all-or-nothing so one bad file in a batch of ten does not
+discard the nine good ones. `rejected` is **not** added to the SQL `doc_status`
+enum — it exists only in the API response, since rejected files are never
+persisted. (`no_files` is enforced in the service; via HTTP an empty multipart
+body is also caught earlier by FastAPI's own `422`.)
 
 ### File-type validation by magic bytes
 Accepted types (pdf/jpg/png) are decided from leading-byte signatures

@@ -23,26 +23,44 @@ class DocStatus(StrEnum):
     failed = "failed"
 
 
-class DocumentCreated(BaseModel):
-    """One entry of the POST /api/documents success response."""
+class UploadItemStatus(StrEnum):
+    """Per-file outcome status in the POST /api/documents response.
 
-    document_id: UUID
-    status: DocStatus
+    `queued` mirrors the stored `documents.status`; `rejected` is response-only
+    (a rejected file is never stored, so it has no DB row).
+    """
+
+    queued = "queued"
+    rejected = "rejected"
 
 
-class FileResult(BaseModel):
-    """Per-file outcome, returned in the 4xx body when a batch is rejected."""
+class UploadReason(StrEnum):
+    """Machine-readable reason a file (or the whole request) was rejected."""
+
+    too_large = "too_large"
+    bad_type = "bad_type"
+    too_many_files = "too_many_files"
+    no_files = "no_files"
+
+
+class UploadItemResult(BaseModel):
+    """One entry of the POST /api/documents response (partial success).
+
+    Accepted files carry `document_id` + status `queued`; rejected files carry
+    status `rejected` + a `reason`.
+    """
 
     filename: str
-    accepted: bool
-    error: str | None = None
+    status: UploadItemStatus
+    document_id: UUID | None = None
+    reason: UploadReason | None = None
 
 
-class RejectionDetail(BaseModel):
-    """Body of the 422 returned when one or more files fail validation."""
+class BatchError(BaseModel):
+    """Body of the 400 returned when the request itself is malformed."""
 
     message: str
-    results: list[FileResult]
+    reason: UploadReason
 
 
 class DocumentListItem(BaseModel):
