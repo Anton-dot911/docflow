@@ -1,5 +1,64 @@
 # Design decisions
 
+## Ingestion (T2)
+
+### Placeholder user_id (auth out of scope)
+Auth is not part of T2. `documents.user_id` is `uuid NOT NULL`, so ingestion
+writes every row under a fixed placeholder UUID
+`00000000-0000-0000-0000-000000000000` (`app.config.PLACEHOLDER_USER_ID`), also
+used as the first Storage path segment. When real auth lands, this constant is
+replaced by the authenticated user's id and the RLS `user_id = auth.uid()`
+policy (already defined in migration 001) starts doing real work. The service
+role key used by the repos layer bypasses RLS, which is why inserts succeed
+today.
+
+### Batch semantics: partial success
+A batch accepts the valid files and rejects the invalid ones **individually**,
+rather than all-or-nothing. `POST /api/documents` returns `200` with one entry
+per input file, in order:
+`[{filename, status, document_id?, reason?}]`
+
+- **accepted** → `status:"queued"` + `document_id` (file stored, row created,
+  status stub scheduled).
+- **rejected** → `status:"rejected"` + machine-readable `reason`
+  (`too_large` | `bad_type`); the file is not stored and has no row.
+
+The request only **hard-fails** with `400` when the request itself is
+malformed — zero files (`reason:"no_files"`) or more than 10
+(`reason:"too_many_files"`); body is `{message, reason}`. A `400` means nothing
+was processed.
+
+This extends the `docs/PLAN.md` shape (`[{document_id, status}]`) with
+`filename`/`reason` and a response-only `rejected` status. It was chosen
+deliberately over all-or-nothing so one bad file in a batch of ten does not
+discard the nine good ones. `rejected` is **not** added to the SQL `doc_status`
+enum — it exists only in the API response, since rejected files are never
+persisted. (`no_files` is enforced in the service; via HTTP an empty multipart
+body is also caught earlier by FastAPI's own `422`.)
+
+### File-type validation by magic bytes
+Accepted types (pdf/jpg/png) are decided from leading-byte signatures
+(`app/services/filetypes.py`), not the extension or the client-supplied MIME
+header, so a renamed `.exe -> .pdf` (PE `MZ` header) is rejected. Size limit is
+10 MB/file, enforced on the read content length.
+
+### Private Storage bucket, created programmatically
+The `documents` bucket is created on demand via the service-role key with
+`public=False` (`StorageRepo.ensure_bucket`, idempotent). Files live at
+`{user_id}/{document_id}/{filename}`.
+
+### Background status stub
+`documents.status` walks `queued -> processing -> review` via a FastAPI
+background task (`_run_status_stub`) with a configurable delay
+(`INGESTION_STUB_DELAY_SECONDS`, default 1s; tests use 0). This exercises the
+status flow end-to-end; T3+ replaces the stub with real preprocessing.
+
+### supabase declared as a direct dependency
+`supabase` was already resolved transitively through `meter`; T2 declares it
+explicitly in `pyproject.toml` so the repos layer does not rely on a transitive
+pin. Its sub-packages ship incomplete type stubs, so `supabase.*`, `storage3.*`,
+and `postgrest.*` are marked `ignore_missing_imports` for mypy strict.
+
 ## Scaffolder friction (T7)
 
 Generated with `npx github:Anton-dot911/Project-Scaffolder` (`antlab-create`):
