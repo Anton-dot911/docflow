@@ -32,6 +32,7 @@ dev = [
     "httpx>=0.27",
     "ruff>=0.8",
     "mypy>=1.13",
+    "fpdf2>=2.8.7",
 ]
 
 [build-system]
@@ -56,6 +57,11 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+# DocFlow processes Ukrainian documents, so Cyrillic literals are pervasive and
+# intentional (invoice sample data, prompts, test expectations). The
+# ambiguous-unicode checks (Cyrillic look-alikes of Latin letters) are pure
+# noise here and would otherwise flag every real business string.
+ignore = ["RUF001", "RUF002", "RUF003"]
 
 [tool.mypy]
 strict = true
@@ -77,4 +83,10 @@ ignore_missing_imports = true
 # pypdfium2 (T3 preprocessing) ships no py.typed marker; treat as untyped.
 [[tool.mypy.overrides]]
 module = ["pypdfium2.*"]
+ignore_missing_imports = true
+
+# fpdf2 (dev-only, generates the T5 invoice text fixture) ships no py.typed
+# marker; treat as untyped rather than failing strict mode.
+[[tool.mypy.overrides]]
+module = ["fpdf.*"]
 ignore_missing_imports = true

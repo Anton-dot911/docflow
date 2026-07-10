@@ -1,4 +1,4 @@
-from app.llm.client import Llm, LlmError, create_llm
+from app.llm.client import CallMetrics, Llm, LlmError, create_llm
 
 # Every DocFlow LLM call is metered under this Meter project (recorded to the
 # shared Supabase `llm_calls` table). Use create_docflow_llm so the project is
@@ -11,4 +11,4 @@ def create_docflow_llm(component: str) -> Llm:
     return create_llm(project=PROJECT, component=component)
 
 
-__all__ = ["PROJECT", "Llm", "LlmError", "create_docflow_llm", "create_llm"]
+__all__ = ["PROJECT", "CallMetrics", "Llm", "LlmError", "create_docflow_llm", "create_llm"]
