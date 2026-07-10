@@ -33,6 +33,7 @@ from app.models.document import (
 )
 from app.repos.documents import DocumentsRepo
 from app.repos.storage import StorageRepo, build_storage_path
+from app.services.extract import extract_document
 from app.services.filetypes import content_type_for, sniff_type
 from app.services.preprocess import preprocess
 
@@ -80,14 +81,15 @@ def _validate(payload: UploadFilePayload) -> _Validated:
     return _Validated(filename, file_type, None)
 
 
-def _run_preprocess(documents: DocumentsRepo, document_id: UUID, content: bytes) -> None:
-    """Background worker: queued -> processing -> preprocess -> review (or failed).
+def _run_pipeline(documents: DocumentsRepo, document_id: UUID, content: bytes) -> None:
+    """Background worker: queued -> processing -> preprocess -> extract -> review.
 
-    Runs real preprocessing (T3): mark the row `processing`, turn the uploaded
-    bytes into a `PreprocessedDoc`, then persist `mode`/`pages` and advance to
-    `review`. Any preprocessing error moves the row to `failed` with the message
-    instead of leaving it stuck in `processing`. Classification/extraction (T4+)
-    slot in between preprocess and `review` later.
+    Marks the row `processing`, turns the uploaded bytes into a `PreprocessedDoc`
+    (T3), runs invoice extraction (T5) which persists the `extractions` row, then
+    advances to `review` recording `mode`/`pages`. A failure in either stage
+    moves the row to `failed` with the error message stored, so a document is
+    never stranded in `processing` and an extraction failure is never a silent
+    drop.
 
     The already-read upload bytes are handed in directly rather than re-fetched
     from Storage: FastAPI BackgroundTasks run in-process right after the response,
@@ -97,7 +99,12 @@ def _run_preprocess(documents: DocumentsRepo, document_id: UUID, content: bytes)
     try:
         result = preprocess(content)
     except Exception as error:  # any failure must not strand the row in processing
-        documents.mark_failed(document_id=document_id, error=str(error))
+        documents.mark_failed(document_id=document_id, error=f"preprocess failed: {error}")
+        return
+    try:
+        extract_document(document_id=document_id, doc=result)
+    except Exception as error:  # extraction failure -> failed, never a silent drop
+        documents.mark_failed(document_id=document_id, error=f"extraction failed: {error}")
         return
     documents.mark_reviewable(document_id=document_id, mode=result.mode, pages=result.pages)
 
@@ -158,7 +165,7 @@ class IngestionService:
                 storage_path=storage_path,
             )
             background_tasks.add_task(
-                _run_preprocess,
+                _run_pipeline,
                 self._documents,
                 document_id,
                 payload.content,

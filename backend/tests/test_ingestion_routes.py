@@ -30,17 +30,18 @@ JPEG = b"\xff\xd8\xff\xe0\x00\x10JFIF" + b"\x00" * 16
 
 
 @pytest.fixture(autouse=True)
-def _stub_preprocess(monkeypatch: pytest.MonkeyPatch) -> None:
+def _stub_pipeline(monkeypatch: pytest.MonkeyPatch) -> None:
     # These ingestion tests exercise the HTTP/validation/storage wiring, not
-    # real preprocessing (that has its own suite on decodable fixtures). The
-    # magic-header-only test bytes above are not decodable, so stub preprocess
-    # with a canned vision result; the background task runs synchronously under
-    # TestClient.
+    # real preprocessing/extraction (each has its own suite). The magic-header-
+    # only test bytes above are not decodable, so stub preprocess with a canned
+    # vision result and stub extraction with a no-op; the background task runs
+    # synchronously under TestClient.
     monkeypatch.setattr(
         ingestion,
         "preprocess",
         lambda content: PreprocessedDoc(mode="vision", images=[b"png"], pages=1),
     )
+    monkeypatch.setattr(ingestion, "extract_document", lambda **kwargs: None)
 
 
 @pytest.fixture

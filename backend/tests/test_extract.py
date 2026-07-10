@@ -1,0 +1,191 @@
+"""Unit tests for services/extract.py (SDK mocked via mock_llm).
+
+Cover the two request shapes (text vs vision content blocks), persistence of
+payload/confidences/metrics, the forced invoice doc_type, and the background
+worker's failure path (extraction error -> document status failed). No network
+or real Anthropic/Supabase access.
+"""
+
+from __future__ import annotations
+
+import base64
+from decimal import Decimal
+from types import SimpleNamespace
+from typing import Any
+from unittest.mock import MagicMock
+from uuid import uuid4
+
+import pytest
+from anthropic.types import ToolUseBlock
+from conftest import MockLlm
+
+import app.services.ingestion as ingestion
+from app.llm import client as llm_client
+from app.llm.client import LlmError
+from app.models.domain import DocType, ExtractionResult
+from app.models.preprocess import PreprocessedDoc
+from app.services.extract import ExtractionService
+
+# A schema-valid ExtractionResult the mocked tool call returns.
+VALID_PAYLOAD: dict[str, Any] = {
+    "doc_type": "invoice",
+    "payload": {
+        "supplier": {
+            "name": "ТОВ «Технопостач»",
+            "tax_id": "38492067",
+            "address": "м. Київ, вул. Промислова, 15",
+        },
+        "buyer": {
+            "name": "ФОП Коваленко Олена Петрівна",
+            "tax_id": "3012415678",
+            "address": "м. Харків, просп. Науки, 47",
+        },
+        "invoice_number": "РФ-2024/0317",
+        "invoice_date": "2024-04-17",
+        "items": [
+            {
+                "name": "Ноутбук Lenovo",
+                "quantity": "3",
+                "unit_price": "32500.00",
+                "amount": "97500.00",
+            },
+        ],
+        "subtotal": "97500.00",
+        "vat_amount": "19500.00",
+        "total": "117000.00",
+    },
+    "confidences": [
+        {"path": "supplier.name", "confidence": 0.95, "source_snippet": "ТОВ «Технопостач»"},
+        {"path": "total", "confidence": 0.9, "source_snippet": "Всього: 117000.00"},
+    ],
+}
+
+
+class FakeExtractionsRepo:
+    """Captures the kwargs passed to create() for assertions."""
+
+    def __init__(self) -> None:
+        self.created: dict[str, Any] | None = None
+
+    def create(self, **kwargs: Any) -> dict[str, Any]:
+        self.created = kwargs
+        return {"id": str(uuid4()), **kwargs}
+
+
+def _response(
+    payload: dict[str, Any],
+    *,
+    model: str = "claude-haiku-4-5",
+    tokens_in: int = 1500,
+    tokens_out: int = 420,
+) -> SimpleNamespace:
+    """A Message-shaped stand-in carrying a tool call plus usage/model."""
+    block = ToolUseBlock(type="tool_use", id="toolu_1", name=llm_client.TOOL_NAME, input=payload)
+    usage = SimpleNamespace(input_tokens=tokens_in, output_tokens=tokens_out)
+    return SimpleNamespace(content=[block], stop_reason="tool_use", model=model, usage=usage)
+
+
+def _service(mock_llm: MockLlm, repo: FakeExtractionsRepo) -> ExtractionService:
+    return ExtractionService(llm=mock_llm.make(component="extract"), extractions=repo)  # type: ignore[arg-type]
+
+
+def test_text_mode_sends_extracted_text_verbatim(mock_llm: MockLlm) -> None:
+    mock_llm.create.return_value = _response(VALID_PAYLOAD)
+    service = _service(mock_llm, FakeExtractionsRepo())
+    doc = PreprocessedDoc(mode="text", text="Рахунок № РФ-2024/0317 ...", pages=1)
+
+    result = service.extract(document_id=uuid4(), doc=doc)
+
+    assert isinstance(result, ExtractionResult)
+    kwargs = mock_llm.create.call_args.kwargs
+    # Text mode: the extracted text is the user message content, used verbatim.
+    assert kwargs["messages"][0]["content"] == "Рахунок № РФ-2024/0317 ..."
+    # Structured tool-use call at temperature 0 (CLAUDE.md rule 4).
+    assert kwargs["tools"][0]["name"] == llm_client.TOOL_NAME
+    assert kwargs["tool_choice"] == {"type": "tool", "name": llm_client.TOOL_NAME}
+    assert kwargs["temperature"] == 0.0
+
+
+def test_vision_mode_sends_text_then_base64_image_blocks(mock_llm: MockLlm) -> None:
+    mock_llm.create.return_value = _response(VALID_PAYLOAD)
+    service = _service(mock_llm, FakeExtractionsRepo())
+    doc = PreprocessedDoc(mode="vision", images=[b"\x89PNG-page-1", b"\x89PNG-page-2"], pages=2)
+
+    service.extract(document_id=uuid4(), doc=doc)
+
+    content = mock_llm.create.call_args.kwargs["messages"][0]["content"]
+    assert isinstance(content, list)
+    # Leading text block, then one image block per page.
+    assert content[0]["type"] == "text"
+    images = [block for block in content if block["type"] == "image"]
+    assert len(images) == 2
+    assert images[0]["source"]["type"] == "base64"
+    assert images[0]["source"]["media_type"] == "image/png"
+    # The bytes round-trip through base64 unchanged.
+    assert base64.standard_b64decode(images[0]["source"]["data"]) == b"\x89PNG-page-1"
+    assert base64.standard_b64decode(images[1]["source"]["data"]) == b"\x89PNG-page-2"
+
+
+def test_persists_payload_confidences_and_metrics(mock_llm: MockLlm) -> None:
+    mock_llm.create.return_value = _response(
+        VALID_PAYLOAD, model="claude-haiku-4-5", tokens_in=1500, tokens_out=420
+    )
+    repo = FakeExtractionsRepo()
+    document_id = uuid4()
+    _service(mock_llm, repo).extract(
+        document_id=document_id,
+        doc=PreprocessedDoc(mode="text", text="invoice text", pages=1),
+    )
+
+    assert repo.created is not None
+    row = repo.created
+    assert row["document_id"] == document_id
+    # Metrics from the (mocked) response usage + meter pricing.
+    assert row["model"] == "claude-haiku-4-5"
+    assert row["tokens_in"] == 1500
+    assert row["tokens_out"] == 420
+    assert isinstance(row["cost_usd"], Decimal)
+    assert row["cost_usd"] > Decimal("0")
+    assert isinstance(row["latency_ms"], int)
+    assert row["latency_ms"] >= 0
+    # payload is JSON-native: Decimals -> numeric strings, dates -> ISO 8601.
+    assert row["payload"]["subtotal"] == "97500.00"
+    assert row["payload"]["invoice_date"] == "2024-04-17"
+    assert row["payload"]["items"][0]["amount"] == "97500.00"
+    # Per-field confidences persisted as a list of dicts.
+    assert row["field_confidences"][0]["path"] == "supplier.name"
+    assert row["field_confidences"][0]["confidence"] == 0.95
+
+
+def test_doc_type_is_forced_to_invoice(mock_llm: MockLlm) -> None:
+    # Even if the model echoes a different type, T5 pins it to invoice (T10 owns
+    # real classification).
+    payload = {**VALID_PAYLOAD, "doc_type": "other"}
+    mock_llm.create.return_value = _response(payload)
+    result = _service(mock_llm, FakeExtractionsRepo()).extract(
+        document_id=uuid4(),
+        doc=PreprocessedDoc(mode="text", text="invoice text", pages=1),
+    )
+    assert result.doc_type == DocType.invoice
+
+
+def test_pipeline_marks_failed_when_extraction_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    documents = MagicMock(name="DocumentsRepo")
+    monkeypatch.setattr(
+        ingestion,
+        "preprocess",
+        lambda content: PreprocessedDoc(mode="text", text="some invoice text", pages=1),
+    )
+
+    def _boom(**kwargs: Any) -> None:
+        raise LlmError("model returned no structured_output tool call")
+
+    monkeypatch.setattr(ingestion, "extract_document", _boom)
+
+    ingestion._run_pipeline(documents, uuid4(), b"bytes")
+
+    # Marked processing, then failed with the error stored; never advanced to review.
+    assert [c.kwargs["status"] for c in documents.set_status.call_args_list] == ["processing"]
+    documents.mark_failed.assert_called_once()
+    assert "extraction failed" in documents.mark_failed.call_args.kwargs["error"]
+    documents.mark_reviewable.assert_not_called()
