@@ -207,6 +207,5 @@ def zero_out_confidences(
     """
     bad_paths = {issue.path for issue in issues}
     return [
-        c.model_copy(update={"confidence": 0.0}) if c.path in bad_paths else c
-        for c in confidences
+        c.model_copy(update={"confidence": 0.0}) if c.path in bad_paths else c for c in confidences
     ]
