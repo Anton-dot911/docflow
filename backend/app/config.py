@@ -7,6 +7,7 @@ are defined here so routes, services, and tests share a single source of truth.
 
 from __future__ import annotations
 
+from decimal import Decimal
 from uuid import UUID
 
 # --- Upload validation (T2) -------------------------------------------------
@@ -21,6 +22,14 @@ ALLOWED_TYPES: frozenset[str] = frozenset({"pdf", "jpg", "png"})
 # Private bucket that holds every uploaded document. Created programmatically
 # with the service-role key if it does not already exist.
 STORAGE_BUCKET = "documents"
+
+# --- Validation (T6) ---------------------------------------------------------
+# Absolute tolerance for line/subtotal/total arithmetic checks (Decimal, per
+# CLAUDE.md rule 7 — money is never float).
+VALIDATION_AMOUNT_TOLERANCE = Decimal("0.01")
+
+# invoice_date sanity: older than this many years -> "stale_date".
+MAX_INVOICE_AGE_YEARS = 10
 
 # --- Auth placeholder -------------------------------------------------------
 # Auth is out of T2 scope (see docs/decisions.md). Until it lands, every

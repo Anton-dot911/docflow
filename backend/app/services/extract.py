@@ -11,6 +11,10 @@ modes are supported:
 The structured call goes through the T4 `call_structured_metered` wrapper with
 `ExtractionResult` as the output model (tool-use schema + validate + single
 retry). `doc_type` is fixed to `"invoice"` for now — classification is T10.
+
+After extraction, T6's `services/validate.py` runs deterministic checks
+(arithmetic, date sanity, tax-id checksum) against the payload; every issue
+zeroes that field's confidence before persistence so the Review UI flags it.
 """
 
 from __future__ import annotations
@@ -23,6 +27,7 @@ from app.llm import Llm, create_docflow_llm
 from app.models.domain import DocType, ExtractionResult
 from app.models.preprocess import PreprocessedDoc
 from app.repos.extractions import ExtractionsRepo
+from app.services.validate import validate_invoice, zero_out_confidences
 
 PROMPT_FILE = "prompts/extract_invoice.v1.md"
 
@@ -79,10 +84,17 @@ class ExtractionService:
         # unambiguous regardless of what the model echoed back.
         result = result.model_copy(update={"doc_type": DocType.invoice})
 
+        # T6: deterministic validation. Every issue zeroes its field's
+        # confidence so the Review UI flags it alongside low-confidence fields.
+        issues = validate_invoice(result.payload)
+        confidences = zero_out_confidences(result.confidences, issues)
+        result = result.model_copy(update={"confidences": confidences})
+
         self._extractions.create(
             document_id=document_id,
             payload=result.payload.model_dump(mode="json"),
             field_confidences=[c.model_dump(mode="json") for c in result.confidences],
+            validation_issues=[i.model_dump(mode="json") for i in issues],
             model=metrics.model,
             tokens_in=metrics.tokens_in,
             tokens_out=metrics.tokens_out,

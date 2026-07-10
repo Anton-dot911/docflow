@@ -32,7 +32,7 @@ VALID_PAYLOAD: dict[str, Any] = {
     "payload": {
         "supplier": {
             "name": "ТОВ «Технопостач»",
-            "tax_id": "38492067",
+            "tax_id": "38492069",
             "address": "м. Київ, вул. Промислова, 15",
         },
         "buyer": {
@@ -155,6 +155,9 @@ def test_persists_payload_confidences_and_metrics(mock_llm: MockLlm) -> None:
     # Per-field confidences persisted as a list of dicts.
     assert row["field_confidences"][0]["path"] == "supplier.name"
     assert row["field_confidences"][0]["confidence"] == 0.95
+    # T6: VALID_PAYLOAD is internally consistent (arithmetic + checksums), so
+    # validation runs clean and nothing gets zeroed.
+    assert row["validation_issues"] == []
 
 
 def test_doc_type_is_forced_to_invoice(mock_llm: MockLlm) -> None:
@@ -189,3 +192,70 @@ def test_pipeline_marks_failed_when_extraction_raises(monkeypatch: pytest.Monkey
     documents.mark_failed.assert_called_once()
     assert "extraction failed" in documents.mark_failed.call_args.kwargs["error"]
     documents.mark_reviewable.assert_not_called()
+
+
+# --- T6: validation integration ---------------------------------------------
+# A payload identical to VALID_PAYLOAD except the stated total (121450.00)
+# doesn't match subtotal + vat (97500.00 + 19500.00 = 117000.00).
+BROKEN_TOTAL_PAYLOAD: dict[str, Any] = {
+    **VALID_PAYLOAD,
+    "payload": {**VALID_PAYLOAD["payload"], "total": "121450.00"},
+}
+
+
+def test_validation_issue_zeroes_confidence_and_persists(mock_llm: MockLlm) -> None:
+    mock_llm.create.return_value = _response(BROKEN_TOTAL_PAYLOAD)
+    repo = FakeExtractionsRepo()
+    result = _service(mock_llm, repo).extract(
+        document_id=uuid4(),
+        doc=PreprocessedDoc(mode="text", text="invoice text", pages=1),
+    )
+
+    assert repo.created is not None
+    issues = repo.created["validation_issues"]
+    assert [i["code"] for i in issues] == ["total_mismatch"]
+    assert issues[0]["path"] == "total"
+    assert issues[0]["message"] == (
+        "subtotal 97500.00 + vat 19500.00 = 117000.00, document says 121450.00"
+    )
+    # VALID_PAYLOAD's "total" confidence (0.9) is zeroed; "supplier.name" is untouched.
+    conf_by_path = {c.path: c.confidence for c in result.confidences}
+    assert conf_by_path["total"] == 0.0
+    assert conf_by_path["supplier.name"] == 0.95
+    expected_confidences = [c.model_dump(mode="json") for c in result.confidences]
+    assert repo.created["field_confidences"] == expected_confidences
+
+
+def test_pipeline_reaches_review_despite_validation_issues(
+    mock_llm: MockLlm, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A validation issue is a confidence signal, not a pipeline failure: the
+    document still advances to review, with the issue persisted for the UI."""
+    documents = MagicMock(name="DocumentsRepo")
+    repo = FakeExtractionsRepo()
+    monkeypatch.setattr(
+        ingestion,
+        "preprocess",
+        lambda content: PreprocessedDoc(mode="text", text="some invoice text", pages=1),
+    )
+    mock_llm.create.return_value = _response(BROKEN_TOTAL_PAYLOAD)
+    service = _service(mock_llm, repo)
+    monkeypatch.setattr(
+        ingestion,
+        "extract_document",
+        lambda *, document_id, doc: service.extract(document_id=document_id, doc=doc),
+    )
+
+    document_id = uuid4()
+    ingestion._run_pipeline(documents, document_id, b"bytes")
+
+    documents.mark_failed.assert_not_called()
+    documents.mark_reviewable.assert_called_once()
+    assert repo.created is not None
+    assert repo.created["validation_issues"] == [
+        {
+            "path": "total",
+            "code": "total_mismatch",
+            "message": "subtotal 97500.00 + vat 19500.00 = 117000.00, document says 121450.00",
+        }
+    ]

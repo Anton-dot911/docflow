@@ -40,7 +40,9 @@ FONT_BOLD_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 EXPECTED_INVOICE_TEXT: dict[str, Any] = {
     "supplier": {
         "name": "ТОВ «Технопостач»",
-        "tax_id": "38492067",
+        # Checksum-valid 8-digit ЄДРПОУ (T6 validates the control digit; see
+        # services/validate.py) so the clean fixture produces zero issues.
+        "tax_id": "38492069",
         "address": "м. Київ, вул. Промислова, 15, оф. 204",
     },
     "buyer": {

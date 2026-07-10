@@ -3,7 +3,8 @@
 All DB access for extractions goes through here (CLAUDE.md rule 8: no raw SQL in
 route handlers). Uses the service-role Supabase client, so RLS is bypassed and
 the caller scopes by the parent document. T5 writes one row per successful
-extraction with the payload, per-field confidences and the call's cost/latency.
+extraction with the payload, per-field confidences and the call's cost/latency;
+T6 adds the deterministic `validation_issues` produced by `services/validate.py`.
 """
 
 from __future__ import annotations
@@ -29,6 +30,7 @@ class ExtractionsRepo:
         document_id: UUID,
         payload: dict[str, Any],
         field_confidences: list[dict[str, Any]],
+        validation_issues: list[dict[str, Any]],
         model: str,
         tokens_in: int | None,
         tokens_out: int | None,
@@ -37,18 +39,18 @@ class ExtractionsRepo:
     ) -> dict[str, Any]:
         """Insert one extraction row and return it.
 
-        `payload` and `field_confidences` are already JSON-native (see
-        `services/extract.py`, which dumps the Pydantic models in JSON mode so
-        Decimals become numeric strings and dates ISO 8601). `cost_usd` is a
-        `Decimal` (CLAUDE.md rule 7) serialized as a string to preserve its
-        5-decimal precision into the `numeric(10,5)` column. `schema_version`
-        and `validation_issues` keep their DDL defaults (1 and `[]`); validation
-        (T6) fills the latter later.
+        `payload`, `field_confidences` and `validation_issues` are already
+        JSON-native (see `services/extract.py`, which dumps the Pydantic
+        models in JSON mode so Decimals become numeric strings and dates ISO
+        8601). `cost_usd` is a `Decimal` (CLAUDE.md rule 7) serialized as a
+        string to preserve its 5-decimal precision into the `numeric(10,5)`
+        column. `schema_version` keeps its DDL default (1).
         """
         row = {
             "document_id": str(document_id),
             "payload": payload,
             "field_confidences": field_confidences,
+            "validation_issues": validation_issues,
             "model": model,
             "tokens_in": tokens_in,
             "tokens_out": tokens_out,
