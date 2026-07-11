@@ -66,6 +66,7 @@ ignore = ["RUF001", "RUF002", "RUF003"]
 [tool.mypy]
 strict = true
 files = ["app", "tests"]
+mypy_path = ["scripts"]
 plugins = ["pydantic.mypy"]
 
 # Meter ships no py.typed marker, so treat it as an untyped third-party import

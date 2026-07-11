@@ -145,13 +145,16 @@ DoD: exhaustive unit tests incl. tolerance edges and checksum vectors.
 Two-pane page: left document render (pdf.js / image), right schema-driven form; fields with confidence < 0.85 or validation issue highlighted; field click ⇄ snippet highlight; PATCH per edit; Confirm button.
 DoD: vitest component tests for highlight logic; manual e2e checklist in PR. — met: vitest (flags/guided-nav/confirm-gate/reducer/text-search) + pytest for the 4 routes green; manual checklist in `docs/e2e-review-checklist.md`.
 
-**T8. Export & history.**
+**T8. Export & history.** ✅ Done (PR #8)
 JSON/CSV export (CSV: one row per line item, header fields repeated), history list page with statuses.
-DoD: golden-file tests for CSV shape.
+DoD: golden-file tests for CSV shape. — met.
 
-**T9. Demo mode.**
+**T9. Demo mode.** ✅ Done
 Seed script uploads 5 curated docs under demo user; `/demo` page, no auth; rate-limited.
-DoD: fresh deploy + seed = working demo in ≤ 2 commands.
+DoD: fresh deploy + seed = working demo in ≤ 2 commands. — met: `scripts/seed_demo.py`
+(idempotent, `--reset`) + `/demo` entry page, rebased onto T8's real export
+implementation once it merged; see `docs/decisions.md` for the T8-precondition
+gap this originally ran into and the guardrail decisions made.
 
 **T10. Classifier + Act type.**
 `prompts/classify.v1.md`, `Classification` call on page 1; `ActData` model + `extract_act.v1.md`; router by doc_type.

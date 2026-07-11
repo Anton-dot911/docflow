@@ -11,13 +11,15 @@ from __future__ import annotations
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import ValidationError
 
+from app.demo_data import is_demo_document_id
 from app.models.domain import FieldConfidence, InvoiceData
 from app.models.review import ExtractionDetail, PatchExtractionRequest
 from app.repos.extractions import ExtractionsRepo
 from app.repos.review_log import ReviewLogRepo
+from app.services.demo_guard import enforce_demo_document_rate_limit
 from app.services.field_path import FieldPathError, get_field_value, set_field_value
 
 router = APIRouter(prefix="/api/extractions", tags=["extractions"])
@@ -35,6 +37,7 @@ def get_review_log_repo() -> ReviewLogRepo:
 def patch_extraction(
     extraction_id: UUID,
     body: PatchExtractionRequest,
+    request: Request,
     extractions: Annotated[ExtractionsRepo, Depends(get_extractions_repo)],
     review_log: Annotated[ReviewLogRepo, Depends(get_review_log_repo)],
 ) -> ExtractionDetail:
@@ -45,10 +48,17 @@ def patch_extraction(
     review_log write are identical either way. Any T6 validation issue at
     `field_path` is cleared: the operator has now looked at it, so the field
     should render green (not red) on the next GET, per UI_SPEC.
+
+    Edits to a demo document (T9) are applied the same way, but are never
+    written to `review_log` — that table is training signal for future prompt
+    work, and public, no-auth demo edits are noise (see docs/decisions.md).
     """
     row = extractions.get_by_id(extraction_id)
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="extraction not found")
+    is_demo = is_demo_document_id(UUID(str(row["document_id"])))
+    if is_demo:
+        enforce_demo_document_rate_limit(request, UUID(str(row["document_id"])))
 
     payload = row["payload"]
     try:
@@ -81,10 +91,11 @@ def patch_extraction(
         field_confidences=[c.model_dump(mode="json") for c in updated_confidences],
         validation_issues=remaining_issues,
     )
-    review_log.create(
-        extraction_id=extraction_id,
-        field_path=body.field_path,
-        old_value=old_value,
-        new_value=body.new_value,
-    )
+    if not is_demo:
+        review_log.create(
+            extraction_id=extraction_id,
+            field_path=body.field_path,
+            old_value=old_value,
+            new_value=body.new_value,
+        )
     return ExtractionDetail.model_validate(updated_row)

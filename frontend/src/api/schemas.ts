@@ -119,3 +119,18 @@ export const documentListResponseSchema = z.object({
   offset: z.number(),
 });
 export type DocumentListResponse = z.infer<typeof documentListResponseSchema>;
+
+// --- T9 Demo mode -------------------------------------------------------------
+// Mirrors backend/app/models/demo.py's DemoSampleItem (GET /api/demo/samples).
+
+export const demoSampleSchema = z.object({
+  id: z.string(),
+  key: z.string(),
+  filename: z.string(),
+  difficulty: z.string(),
+  title: z.string(),
+  description: z.string(),
+  status: docStatusSchema,
+  doc_type: z.string().nullable(),
+});
+export type DemoSample = z.infer<typeof demoSampleSchema>;

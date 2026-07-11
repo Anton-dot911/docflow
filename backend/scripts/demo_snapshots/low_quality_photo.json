@@ -1,0 +1,131 @@
+{
+  "field_confidences": [
+    {
+      "confidence": 0.95,
+      "path": "supplier.name",
+      "source_snippet": "ФОП Гончаренко Тарас Миколайович"
+    },
+    {
+      "confidence": 0.96,
+      "path": "supplier.tax_id",
+      "source_snippet": "ЄДРПОУ 30112357"
+    },
+    {
+      "confidence": 0.94,
+      "path": "supplier.address",
+      "source_snippet": "м. Харків, просп. Гагаріна, 15"
+    },
+    {
+      "confidence": 0.95,
+      "path": "buyer.name",
+      "source_snippet": "ТОВ «Ветра Опт»"
+    },
+    {
+      "confidence": 0.94,
+      "path": "buyer.tax_id",
+      "source_snippet": "ЄДРПОУ/ІПН 3211500016"
+    },
+    {
+      "confidence": 0.94,
+      "path": "buyer.address",
+      "source_snippet": "м. Полтава, вул. Соборності, 44"
+    },
+    {
+      "confidence": 0.97,
+      "path": "invoice_number",
+      "source_snippet": "РАХУНОК-ФАКТУРА № ФО-0092"
+    },
+    {
+      "confidence": 0.96,
+      "path": "invoice_date",
+      "source_snippet": "від 6 липня 2026 р."
+    },
+    {
+      "confidence": 0.93,
+      "path": "items[0].name",
+      "source_snippet": "Овочі свіжі, ящик"
+    },
+    {
+      "confidence": 0.95,
+      "path": "items[0].quantity",
+      "source_snippet": "15"
+    },
+    {
+      "confidence": 0.95,
+      "path": "items[0].unit_price",
+      "source_snippet": "320.00"
+    },
+    {
+      "confidence": 0.95,
+      "path": "items[0].amount",
+      "source_snippet": "4800.00"
+    },
+    {
+      "confidence": 0.93,
+      "path": "items[1].name",
+      "source_snippet": "Фрукти сезонні, ящик"
+    },
+    {
+      "confidence": 0.95,
+      "path": "items[1].quantity",
+      "source_snippet": "10"
+    },
+    {
+      "confidence": 0.95,
+      "path": "items[1].unit_price",
+      "source_snippet": "410.00"
+    },
+    {
+      "confidence": 0.95,
+      "path": "items[1].amount",
+      "source_snippet": "4100.00"
+    },
+    {
+      "confidence": 0.96,
+      "path": "subtotal",
+      "source_snippet": "Разом без ПДВ: 8900.00"
+    },
+    {
+      "confidence": 0.96,
+      "path": "vat_amount",
+      "source_snippet": "ПДВ 20%: 1780.00"
+    },
+    {
+      "confidence": 0.97,
+      "path": "total",
+      "source_snippet": "Всього до сплати: 10680.00"
+    }
+  ],
+  "payload": {
+    "buyer": {
+      "address": "м. Полтава, вул. Соборності, 44",
+      "name": "ТОВ «Ветра Опт»",
+      "tax_id": "3211500016"
+    },
+    "invoice_date": "2026-07-06",
+    "invoice_number": "ФО-0092",
+    "items": [
+      {
+        "amount": "4800.00",
+        "name": "Овочі свіжі, ящик",
+        "quantity": "15",
+        "unit_price": "320.00"
+      },
+      {
+        "amount": "4100.00",
+        "name": "Фрукти сезонні, ящик",
+        "quantity": "10",
+        "unit_price": "410.00"
+      }
+    ],
+    "subtotal": "8900.00",
+    "supplier": {
+      "address": "м. Харків, просп. Гагаріна, 15",
+      "name": "ФОП Гончаренко Тарас Миколайович",
+      "tax_id": "30112357"
+    },
+    "total": "10680.00",
+    "vat_amount": "1780.00"
+  },
+  "validation_issues": []
+}

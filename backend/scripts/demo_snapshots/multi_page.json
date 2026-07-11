@@ -1,0 +1,287 @@
+{
+  "field_confidences": [
+    {
+      "confidence": 0.98,
+      "path": "supplier.name",
+      "source_snippet": "ТОВ «Технопостач Груп»"
+    },
+    {
+      "confidence": 0.98,
+      "path": "supplier.tax_id",
+      "source_snippet": "ЄДРПОУ 30112363"
+    },
+    {
+      "confidence": 0.97,
+      "path": "supplier.address",
+      "source_snippet": "м. Київ, просп. Перемоги, 67"
+    },
+    {
+      "confidence": 0.98,
+      "path": "buyer.name",
+      "source_snippet": "ТОВ «Офіс Плюс»"
+    },
+    {
+      "confidence": 0.98,
+      "path": "buyer.tax_id",
+      "source_snippet": "ЄДРПОУ/ІПН 3211500022"
+    },
+    {
+      "confidence": 0.97,
+      "path": "buyer.address",
+      "source_snippet": "м. Вінниця, вул. Соборна, 12"
+    },
+    {
+      "confidence": 0.98,
+      "path": "invoice_number",
+      "source_snippet": "РАХУНОК-ФАКТУРА № ТП-1150"
+    },
+    {
+      "confidence": 0.98,
+      "path": "invoice_date",
+      "source_snippet": "від 11 червня 2026 р."
+    },
+    {
+      "confidence": 0.97,
+      "path": "items[0].name",
+      "source_snippet": "Ноутбук Lenovo ThinkPad E14"
+    },
+    {
+      "confidence": 0.97,
+      "path": "items[0].quantity",
+      "source_snippet": "5"
+    },
+    {
+      "confidence": 0.97,
+      "path": "items[0].unit_price",
+      "source_snippet": "31000.00"
+    },
+    {
+      "confidence": 0.97,
+      "path": "items[0].amount",
+      "source_snippet": "155000.00"
+    },
+    {
+      "confidence": 0.97,
+      "path": "items[1].name",
+      "source_snippet": "Монітор LG 27 UltraFine"
+    },
+    {
+      "confidence": 0.97,
+      "path": "items[1].quantity",
+      "source_snippet": "5"
+    },
+    {
+      "confidence": 0.97,
+      "path": "items[1].unit_price",
+      "source_snippet": "9800.00"
+    },
+    {
+      "confidence": 0.97,
+      "path": "items[1].amount",
+      "source_snippet": "49000.00"
+    },
+    {
+      "confidence": 0.97,
+      "path": "items[2].name",
+      "source_snippet": "Док-станція USB-C"
+    },
+    {
+      "confidence": 0.97,
+      "path": "items[2].quantity",
+      "source_snippet": "5"
+    },
+    {
+      "confidence": 0.97,
+      "path": "items[2].unit_price",
+      "source_snippet": "2400.00"
+    },
+    {
+      "confidence": 0.97,
+      "path": "items[2].amount",
+      "source_snippet": "12000.00"
+    },
+    {
+      "confidence": 0.97,
+      "path": "items[3].name",
+      "source_snippet": "Миша бездротова Logitech"
+    },
+    {
+      "confidence": 0.97,
+      "path": "items[3].quantity",
+      "source_snippet": "10"
+    },
+    {
+      "confidence": 0.97,
+      "path": "items[3].unit_price",
+      "source_snippet": "650.00"
+    },
+    {
+      "confidence": 0.97,
+      "path": "items[3].amount",
+      "source_snippet": "6500.00"
+    },
+    {
+      "confidence": 0.97,
+      "path": "items[4].name",
+      "source_snippet": "Клавіатура механічна"
+    },
+    {
+      "confidence": 0.97,
+      "path": "items[4].quantity",
+      "source_snippet": "10"
+    },
+    {
+      "confidence": 0.97,
+      "path": "items[4].unit_price",
+      "source_snippet": "1450.00"
+    },
+    {
+      "confidence": 0.97,
+      "path": "items[4].amount",
+      "source_snippet": "14500.00"
+    },
+    {
+      "confidence": 0.97,
+      "path": "items[5].name",
+      "source_snippet": "Гарнітура з мікрофоном"
+    },
+    {
+      "confidence": 0.97,
+      "path": "items[5].quantity",
+      "source_snippet": "10"
+    },
+    {
+      "confidence": 0.97,
+      "path": "items[5].unit_price",
+      "source_snippet": "980.00"
+    },
+    {
+      "confidence": 0.97,
+      "path": "items[5].amount",
+      "source_snippet": "9800.00"
+    },
+    {
+      "confidence": 0.97,
+      "path": "items[6].name",
+      "source_snippet": "Кабель HDMI 2м"
+    },
+    {
+      "confidence": 0.97,
+      "path": "items[6].quantity",
+      "source_snippet": "15"
+    },
+    {
+      "confidence": 0.97,
+      "path": "items[6].unit_price",
+      "source_snippet": "220.00"
+    },
+    {
+      "confidence": 0.97,
+      "path": "items[6].amount",
+      "source_snippet": "3300.00"
+    },
+    {
+      "confidence": 0.97,
+      "path": "items[7].name",
+      "source_snippet": "Подовжувач мережевий 5м"
+    },
+    {
+      "confidence": 0.97,
+      "path": "items[7].quantity",
+      "source_snippet": "8"
+    },
+    {
+      "confidence": 0.97,
+      "path": "items[7].unit_price",
+      "source_snippet": "340.00"
+    },
+    {
+      "confidence": 0.97,
+      "path": "items[7].amount",
+      "source_snippet": "2720.00"
+    },
+    {
+      "confidence": 0.98,
+      "path": "subtotal",
+      "source_snippet": "Разом без ПДВ: 252820.00"
+    },
+    {
+      "confidence": 0.98,
+      "path": "vat_amount",
+      "source_snippet": "ПДВ 20%: 50564.00"
+    },
+    {
+      "confidence": 0.98,
+      "path": "total",
+      "source_snippet": "Всього до сплати: 303384.00"
+    }
+  ],
+  "payload": {
+    "buyer": {
+      "address": "м. Вінниця, вул. Соборна, 12",
+      "name": "ТОВ «Офіс Плюс»",
+      "tax_id": "3211500022"
+    },
+    "invoice_date": "2026-06-11",
+    "invoice_number": "ТП-1150",
+    "items": [
+      {
+        "amount": "155000.00",
+        "name": "Ноутбук Lenovo ThinkPad E14",
+        "quantity": "5",
+        "unit_price": "31000.00"
+      },
+      {
+        "amount": "49000.00",
+        "name": "Монітор LG 27 UltraFine",
+        "quantity": "5",
+        "unit_price": "9800.00"
+      },
+      {
+        "amount": "12000.00",
+        "name": "Док-станція USB-C",
+        "quantity": "5",
+        "unit_price": "2400.00"
+      },
+      {
+        "amount": "6500.00",
+        "name": "Миша бездротова Logitech",
+        "quantity": "10",
+        "unit_price": "650.00"
+      },
+      {
+        "amount": "14500.00",
+        "name": "Клавіатура механічна",
+        "quantity": "10",
+        "unit_price": "1450.00"
+      },
+      {
+        "amount": "9800.00",
+        "name": "Гарнітура з мікрофоном",
+        "quantity": "10",
+        "unit_price": "980.00"
+      },
+      {
+        "amount": "3300.00",
+        "name": "Кабель HDMI 2м",
+        "quantity": "15",
+        "unit_price": "220.00"
+      },
+      {
+        "amount": "2720.00",
+        "name": "Подовжувач мережевий 5м",
+        "quantity": "8",
+        "unit_price": "340.00"
+      }
+    ],
+    "subtotal": "252820.00",
+    "supplier": {
+      "address": "м. Київ, просп. Перемоги, 67",
+      "name": "ТОВ «Технопостач Груп»",
+      "tax_id": "30112363"
+    },
+    "total": "303384.00",
+    "vat_amount": "50564.00"
+  },
+  "validation_issues": []
+}

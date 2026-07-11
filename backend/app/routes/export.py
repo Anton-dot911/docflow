@@ -4,6 +4,11 @@ Thin: resolve the document + its latest extraction, gate on `status ==
 confirmed` (409 otherwise), and hand the validated payload to
 `services/export.py` for the actual JSON/CSV rendering. Repos are provided via
 FastAPI dependencies so unit tests can override them with fakes.
+
+T9 note: exporting a demo document is allowed (same 404/409 gating as a real
+one — a demo doc must be confirmed first, same as any other), but it's
+per-IP rate-limited like every other demo-scoped request (see
+docs/decisions.md).
 """
 
 from __future__ import annotations
@@ -12,12 +17,13 @@ import json
 from typing import Annotated, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 
 from app.models.domain import InvoiceData
 from app.models.export import ExportConflict
 from app.repos.documents import DocumentsRepo
 from app.repos.extractions import ExtractionsRepo
+from app.services.demo_guard import enforce_demo_document_rate_limit
 from app.services.export import (
     build_csv_bytes,
     build_json_export,
@@ -39,6 +45,7 @@ def get_extractions_repo() -> ExtractionsRepo:
 @router.get("/{document_id}/export", responses={409: {"model": ExportConflict}})
 def export_document(
     document_id: UUID,
+    request: Request,
     documents: Annotated[DocumentsRepo, Depends(get_documents_repo)],
     extractions: Annotated[ExtractionsRepo, Depends(get_extractions_repo)],
     format: Annotated[Literal["json", "csv"], Query()] = "json",
@@ -46,6 +53,7 @@ def export_document(
     document = documents.get_by_id(document_id)
     if document is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="document not found")
+    enforce_demo_document_rate_limit(request, document_id)
     if document["status"] != "confirmed":
         conflict = ExportConflict(message="document is not confirmed")
         raise HTTPException(status.HTTP_409_CONFLICT, detail=conflict.model_dump())

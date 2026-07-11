@@ -1,0 +1,163 @@
+{
+  "field_confidences": [
+    {
+      "confidence": 0.98,
+      "path": "supplier.name",
+      "source_snippet": "ТОВ «ДокФлоу Демо Помилка»"
+    },
+    {
+      "confidence": 0.98,
+      "path": "supplier.tax_id",
+      "source_snippet": "ЄДРПОУ 38492069"
+    },
+    {
+      "confidence": 0.97,
+      "path": "supplier.address",
+      "source_snippet": "м. Київ, вул. Хрещатик, 22"
+    },
+    {
+      "confidence": 0.98,
+      "path": "buyer.name",
+      "source_snippet": "ФОП Мельник Ірина Сергіївна"
+    },
+    {
+      "confidence": 0.98,
+      "path": "buyer.tax_id",
+      "source_snippet": "ЄДРПОУ/ІПН 3012415678"
+    },
+    {
+      "confidence": 0.97,
+      "path": "buyer.address",
+      "source_snippet": "м. Львів, вул. Личаківська, 5"
+    },
+    {
+      "confidence": 0.98,
+      "path": "invoice_number",
+      "source_snippet": "РАХУНОК-ФАКТУРА № ДЕМО-0005"
+    },
+    {
+      "confidence": 0.98,
+      "path": "invoice_date",
+      "source_snippet": "від 8 липня 2026 р."
+    },
+    {
+      "confidence": 0.98,
+      "path": "items[0].name",
+      "source_snippet": "Ноутбук Dell Latitude 5540"
+    },
+    {
+      "confidence": 0.98,
+      "path": "items[0].quantity",
+      "source_snippet": "1"
+    },
+    {
+      "confidence": 0.98,
+      "path": "items[0].unit_price",
+      "source_snippet": "28000.00"
+    },
+    {
+      "confidence": 0.98,
+      "path": "items[0].amount",
+      "source_snippet": "28000.00"
+    },
+    {
+      "confidence": 0.98,
+      "path": "items[1].name",
+      "source_snippet": "Монітор Dell 24\""
+    },
+    {
+      "confidence": 0.98,
+      "path": "items[1].quantity",
+      "source_snippet": "2"
+    },
+    {
+      "confidence": 0.98,
+      "path": "items[1].unit_price",
+      "source_snippet": "6200.00"
+    },
+    {
+      "confidence": 0.98,
+      "path": "items[1].amount",
+      "source_snippet": "12400.00"
+    },
+    {
+      "confidence": 0.98,
+      "path": "items[2].name",
+      "source_snippet": "Клавіатура бездротова Logitech"
+    },
+    {
+      "confidence": 0.98,
+      "path": "items[2].quantity",
+      "source_snippet": "3"
+    },
+    {
+      "confidence": 0.98,
+      "path": "items[2].unit_price",
+      "source_snippet": "650.00"
+    },
+    {
+      "confidence": 0.98,
+      "path": "items[2].amount",
+      "source_snippet": "1950.00"
+    },
+    {
+      "confidence": 0.98,
+      "path": "subtotal",
+      "source_snippet": "Разом без ПДВ: 42350.00"
+    },
+    {
+      "confidence": 0.98,
+      "path": "vat_amount",
+      "source_snippet": "ПДВ 20%: 8470.00"
+    },
+    {
+      "confidence": 0.0,
+      "path": "total",
+      "source_snippet": "Всього до сплати: 51070.00"
+    }
+  ],
+  "payload": {
+    "buyer": {
+      "address": "м. Львів, вул. Личаківська, 5",
+      "name": "ФОП Мельник Ірина Сергіївна",
+      "tax_id": "3012415678"
+    },
+    "invoice_date": "2026-07-08",
+    "invoice_number": "ДЕМО-0005",
+    "items": [
+      {
+        "amount": "28000.00",
+        "name": "Ноутбук Dell Latitude 5540",
+        "quantity": "1",
+        "unit_price": "28000.00"
+      },
+      {
+        "amount": "12400.00",
+        "name": "Монітор Dell 24\"",
+        "quantity": "2",
+        "unit_price": "6200.00"
+      },
+      {
+        "amount": "1950.00",
+        "name": "Клавіатура бездротова Logitech",
+        "quantity": "3",
+        "unit_price": "650.00"
+      }
+    ],
+    "subtotal": "42350.00",
+    "supplier": {
+      "address": "м. Київ, вул. Хрещатик, 22",
+      "name": "ТОВ «ДокФлоу Демо Помилка»",
+      "tax_id": "38492069"
+    },
+    "total": "51070.00",
+    "vat_amount": "8470.00"
+  },
+  "validation_issues": [
+    {
+      "code": "total_mismatch",
+      "message": "subtotal 42350.00 + vat 8470.00 = 50820.00, document says 51070.00",
+      "path": "total"
+    }
+  ]
+}

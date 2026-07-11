@@ -46,3 +46,15 @@ REVIEW_THRESHOLD = 0.85
 # document is owned by this fixed user_id so the documents.user_id NOT NULL /
 # uuid column is satisfied and the RLS predicate has something to key on.
 PLACEHOLDER_USER_ID = UUID("00000000-0000-0000-0000-000000000000")
+
+# --- Demo mode (T9) ----------------------------------------------------------
+# Distinct fixed user_id for the 5 public demo documents, so they are trivially
+# distinguishable from PLACEHOLDER_USER_ID's rows in the same tables/storage
+# (see docs/decisions.md).
+DEMO_USER_ID = UUID("00000000-0000-0000-0000-0000000000de")
+
+# Conservative per-IP rate limit applied to public, unauthenticated demo
+# endpoints and to any request that touches a demo document (see
+# app/services/rate_limit.py and docs/decisions.md).
+DEMO_RATE_LIMIT_MAX_REQUESTS = 30
+DEMO_RATE_LIMIT_WINDOW_SECONDS = 60.0

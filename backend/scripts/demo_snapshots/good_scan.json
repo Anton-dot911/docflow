@@ -1,0 +1,157 @@
+{
+  "field_confidences": [
+    {
+      "confidence": 0.98,
+      "path": "supplier.name",
+      "source_snippet": "ТОВ «Будсервіс»"
+    },
+    {
+      "confidence": 0.98,
+      "path": "supplier.tax_id",
+      "source_snippet": "ЄДРПОУ 30112340"
+    },
+    {
+      "confidence": 0.97,
+      "path": "supplier.address",
+      "source_snippet": "м. Дніпро, вул. Європейська, 10"
+    },
+    {
+      "confidence": 0.98,
+      "path": "buyer.name",
+      "source_snippet": "ТОВ «Мегабуд»"
+    },
+    {
+      "confidence": 0.97,
+      "path": "buyer.tax_id",
+      "source_snippet": "ЄДРПОУ/ІПН 3211500000"
+    },
+    {
+      "confidence": 0.97,
+      "path": "buyer.address",
+      "source_snippet": "м. Одеса, вул. Дерибасівська, 3"
+    },
+    {
+      "confidence": 0.98,
+      "path": "invoice_number",
+      "source_snippet": "РАХУНОК-ФАКТУРА № СК-0458"
+    },
+    {
+      "confidence": 0.97,
+      "path": "invoice_date",
+      "source_snippet": "від 21 червня 2026 р."
+    },
+    {
+      "confidence": 0.97,
+      "path": "items[0].name",
+      "source_snippet": "Цемент М500, мішок 25кг"
+    },
+    {
+      "confidence": 0.97,
+      "path": "items[0].quantity",
+      "source_snippet": "100"
+    },
+    {
+      "confidence": 0.97,
+      "path": "items[0].unit_price",
+      "source_snippet": "145.00"
+    },
+    {
+      "confidence": 0.97,
+      "path": "items[0].amount",
+      "source_snippet": "14500.00"
+    },
+    {
+      "confidence": 0.97,
+      "path": "items[1].name",
+      "source_snippet": "Пісок будівельний, тонна"
+    },
+    {
+      "confidence": 0.97,
+      "path": "items[1].quantity",
+      "source_snippet": "20"
+    },
+    {
+      "confidence": 0.97,
+      "path": "items[1].unit_price",
+      "source_snippet": "480.00"
+    },
+    {
+      "confidence": 0.97,
+      "path": "items[1].amount",
+      "source_snippet": "9600.00"
+    },
+    {
+      "confidence": 0.97,
+      "path": "items[2].name",
+      "source_snippet": "Цегла керамічна, тис. шт"
+    },
+    {
+      "confidence": 0.97,
+      "path": "items[2].quantity",
+      "source_snippet": "5"
+    },
+    {
+      "confidence": 0.97,
+      "path": "items[2].unit_price",
+      "source_snippet": "3200.00"
+    },
+    {
+      "confidence": 0.97,
+      "path": "items[2].amount",
+      "source_snippet": "16000.00"
+    },
+    {
+      "confidence": 0.98,
+      "path": "subtotal",
+      "source_snippet": "Разом без ПДВ: 40100.00"
+    },
+    {
+      "confidence": 0.98,
+      "path": "vat_amount",
+      "source_snippet": "ПДВ 20%: 8020.00"
+    },
+    {
+      "confidence": 0.98,
+      "path": "total",
+      "source_snippet": "Всього до сплати: 48120.00"
+    }
+  ],
+  "payload": {
+    "buyer": {
+      "address": "м. Одеса, вул. Дерибасівська, 3",
+      "name": "ТОВ «Мегабуд»",
+      "tax_id": "3211500000"
+    },
+    "invoice_date": "2026-06-21",
+    "invoice_number": "СК-0458",
+    "items": [
+      {
+        "amount": "14500.00",
+        "name": "Цемент М500, мішок 25кг",
+        "quantity": "100",
+        "unit_price": "145.00"
+      },
+      {
+        "amount": "9600.00",
+        "name": "Пісок будівельний, тонна",
+        "quantity": "20",
+        "unit_price": "480.00"
+      },
+      {
+        "amount": "16000.00",
+        "name": "Цегла керамічна, тис. шт",
+        "quantity": "5",
+        "unit_price": "3200.00"
+      }
+    ],
+    "subtotal": "40100.00",
+    "supplier": {
+      "address": "м. Дніпро, вул. Європейська, 10",
+      "name": "ТОВ «Будсервіс»",
+      "tax_id": "30112340"
+    },
+    "total": "48120.00",
+    "vat_amount": "8020.00"
+  },
+  "validation_issues": []
+}

@@ -18,6 +18,7 @@ from fastapi import (
     File,
     HTTPException,
     Query,
+    Request,
     UploadFile,
     status,
 )
@@ -40,6 +41,7 @@ from app.models.review import (
 from app.repos.documents import DocumentsRepo
 from app.repos.extractions import ExtractionsRepo
 from app.repos.storage import StorageRepo
+from app.services.demo_guard import enforce_demo_document_rate_limit
 from app.services.flags import count_flags
 from app.services.ingestion import (
     BatchSizeError,
@@ -130,6 +132,7 @@ def list_documents(
 @router.get("/{document_id}", response_model=DocumentDetailResponse)
 def get_document(
     document_id: UUID,
+    request: Request,
     documents: Annotated[DocumentsRepo, Depends(get_documents_repo)],
     extractions: Annotated[ExtractionsRepo, Depends(get_extractions_repo)],
 ) -> DocumentDetailResponse:
@@ -137,6 +140,7 @@ def get_document(
     document = documents.get_by_id(document_id)
     if document is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="document not found")
+    enforce_demo_document_rate_limit(request, document_id)
     extraction_row = extractions.get_latest_by_document(document_id)
     extraction = ExtractionDetail.model_validate(extraction_row) if extraction_row else None
     return DocumentDetailResponse(
@@ -154,6 +158,7 @@ def get_document(
 @router.get("/{document_id}/file", response_model=FileUrlResponse)
 def get_document_file(
     document_id: UUID,
+    request: Request,
     documents: Annotated[DocumentsRepo, Depends(get_documents_repo)],
     storage: Annotated[StorageRepo, Depends(get_storage_repo)],
 ) -> FileUrlResponse:
@@ -161,6 +166,7 @@ def get_document_file(
     document = documents.get_by_id(document_id)
     if document is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="document not found")
+    enforce_demo_document_rate_limit(request, document_id)
     url = storage.create_signed_url(
         path=document["storage_path"], expires_in=SIGNED_URL_EXPIRES_SECONDS
     )
@@ -174,6 +180,7 @@ def get_document_file(
 )
 def confirm_document(
     document_id: UUID,
+    request: Request,
     documents: Annotated[DocumentsRepo, Depends(get_documents_repo)],
     extractions: Annotated[ExtractionsRepo, Depends(get_extractions_repo)],
 ) -> ConfirmResponse:
@@ -187,6 +194,7 @@ def confirm_document(
     document = documents.get_by_id(document_id)
     if document is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="document not found")
+    enforce_demo_document_rate_limit(request, document_id)
     extraction = extractions.get_latest_by_document(document_id)
     if extraction is not None:
         unresolved = [c["path"] for c in extraction["field_confidences"] if c["confidence"] == 0]

@@ -389,3 +389,150 @@ download, row-click navigation) without writing to the shared live database.
 **Before this ships against the real project, `supabase/migrations/003_export.sql`
 still needs to be applied** (Supabase SQL editor, or `apply_migration` once
 approved).
+
+## Demo mode (T9)
+
+### Precondition: T8 was not merged; a minimal export endpoint was added, then dropped once T8 landed
+The task brief for T9 stated "main must contain merged T8" as a precondition,
+and asked to stop and ask if a contract looked wrong. At the start of the T9
+session `main` was actually at T7 (376fd3b) — T8 ("Export & history", PLAN.md)
+had not been started anywhere (checked all local/remote branches). T9's own
+guardrail list requires "export allowed" for the demo user, which presumes an
+export endpoint exists. Raised this as a blocking question; the user's
+follow-up reiterated "Implement task T9 ONLY," which was read as: proceed on
+top of current `main`, and implement only the slice of T8 that T9's contract
+actually depends on — a minimal `GET /api/documents/{id}/export?format=json|csv`
+wired into `app/routes/documents.py` — rather than the full T8 scope (history
+list page, golden-file CSV regression tests, etc.).
+
+**Follow-up**, once the real T8 PR merged to `main` (full contract: `meta`
+block with `confirmed_at`/`schema_version`, BOM+CRLF CSV, 409-unless-confirmed
+gating, migration 003, history list page): this branch was rebased onto it,
+T8's `app/services/export.py` / `app/routes/export.py` / `tests/test_export.py`
+were kept verbatim, and T9's own minimal export slice (the version described
+immediately above) was deleted outright rather than reconciled — T8 is now the
+one and only export implementation. What carried over: the demo rate-limit
+guardrail was re-applied to T8's `export_document` route (`request` param +
+`enforce_demo_document_rate_limit` call, same pattern as the other
+demo-touching routes), and the `/demo` page's cards gained JSON/CSV download
+links for confirmed documents, reusing T8's `exportUrl()` helper exactly like
+the History page does. `docs/PLAN.md`'s T8 row is now marked done (T8's own
+PR), and T9's row no longer references the superseded minimal-export note.
+
+### Demo documents are ordinary rows, scoped by a second fixed user id
+Auth doesn't exist yet (see the T2 "Placeholder user_id" decision above) — the
+whole app already runs under one fixed `PLACEHOLDER_USER_ID`. Demo documents
+live in the exact same `documents`/`extractions`/Storage bucket, just under a
+second fixed constant, `app.config.DEMO_USER_ID`
+(`00000000-0000-0000-0000-0000000000de`), so they are trivially distinguishable
+from "real" placeholder-user documents without any schema change. The 5 demo
+documents themselves additionally get fixed, hardcoded ids
+(`app/demo_data.py`, `...d1`..`...d5`) so seeding can recognize "already
+seeded" by primary key rather than by any fuzzier matching.
+
+### No DB migration needed for T9
+Every piece of T9 fits the existing `documents`/`extractions`/`review_log`
+schema: `DEMO_USER_ID` is just another `uuid` value for the existing
+`user_id` column, and the 5 demo documents' card metadata (filename,
+difficulty label, title, description) is static application data
+(`app/demo_data.py`), not something that needs its own table. No SQL is
+included in this change; no migration to pause for.
+
+### Upload guardrail: a dedicated always-409 endpoint, not a check inside POST /api/documents
+There is no session/auth concept yet, so a request to the real
+`POST /api/documents` has no way to identify itself as "the demo user" — every
+upload is already the one `PLACEHOLDER_USER_ID`. Rather than inventing a fake
+identity signal, "demo user cannot upload" is implemented as a separate
+`POST /api/demo/documents` (`app/routes/demo.py`) that always returns `409`
+with a friendly Ukrainian message. The `/demo` page itself has no upload
+dropzone at all; this endpoint exists so a direct API call against the demo
+namespace gets a clear, on-brand rejection instead of a bare 404, and so the
+guardrail is something a test can actually assert against.
+
+### Confirm/PATCH: shared global state + snapshot-based reset, not per-session copies
+The task allowed either "per-session copy" or "reset" as the simplest safe
+option. Per-session copies would need a session concept (cookies, forked rows
+per visitor) that doesn't exist anywhere else in the app; building one just
+for the demo would be the more complex option for comparatively little
+benefit on a portfolio demo. Instead, demo documents are shared, global state
+(any visitor's edits are visible to the next visitor until a reset), and
+`scripts/seed_demo.py --reset` restores every seeded demo document to its
+pristine, just-extracted state:
+
+- The first real seed run persists a snapshot of the freshly-extracted
+  `extractions` row (`payload`, `field_confidences`, `validation_issues`) to
+  `scripts/demo_snapshots/<key>.json`, committed to the repo.
+- `--reset` reads that snapshot and writes it back via the extraction's
+  existing id (`ExtractionsRepo.update_after_edit`) plus
+  `DocumentsRepo.set_status(..., "review")` (undoing any demo `confirm`). No
+  Storage or Anthropic call happens on reset — it's two small Postgres
+  updates per document, cheap enough to run nightly via cron ("nightly-safe
+  idempotency").
+- This deliberately never re-bills the LLM after the first seed. The task
+  brief's "extraction cost is acceptable" reads as a one-time cost to
+  authorize, not a recurring one; a reset that re-ran the real pipeline every
+  night would turn a one-off decision into an open-ended recurring spend.
+
+### review_log: demo edits are excluded, not flagged `is_demo`
+The task offered a choice: flag demo review_log rows with `is_demo`, or
+exclude them. Excluding was chosen — `review_log` is described in `docs/TZ.md`
+§6 as "джерело даних для майбутнього поліпшення промптів" (training/analysis
+signal for future prompt work); public, unauthenticated demo edits are noise
+against that purpose and don't need to be retained at all, and excluding them
+needs zero schema change (an `is_demo` flag would need a migration on
+`review_log`, which T9 doesn't otherwise require — see above). PATCH still
+applies the edit itself exactly as for a real document (payload update,
+confidence bump to 1.0, matching validation issue cleared) — only the
+`review_log.create` call is skipped when the extraction's `document_id` is
+one of the 5 fixed demo ids (`app/routes/extractions.py`).
+
+### Rate limiting: in-memory per-IP sliding window, scoped to demo traffic only
+`app/services/rate_limit.py` is a pure, dependency-free sliding-window counter
+(no Redis/new infra for a portfolio demo); `app/services/demo_guard.py` wires
+it into routes. It is applied to: every `/api/demo/*` endpoint, and — via an
+explicit `is_demo_document_id` check inside `routes/documents.py` /
+`routes/extractions.py` / T8's `routes/export.py` — any
+`GET`/`PATCH`/`POST confirm`/`export` request whose target is one of the 5
+fixed demo documents. Real (non-demo) traffic
+through the exact same route handlers is never rate-limited; the check is a
+no-op for any other document id. The limit (30 requests/60s per IP,
+`app.config.DEMO_RATE_LIMIT_*`) is conservative on purpose and resets on
+process restart — acceptable for a demo, called out here in case it causes
+confusion after a deploy.
+
+### Fixture generation extends, rather than imports, the T3/T5 generators
+`scripts/seed_demo.py` reuses `tests/_pdfgen.build_image_pdf` (T3's
+dependency-free PDF wrapper, for the image-PDF "good scan" fixture) and the
+fpdf2 + DejaVuSans Cyrillic-rendering approach from
+`tests/fixtures/generate_invoice_fixtures.py` (for the two born-digital PDFs
+and, extended to a raw `PIL.Image` before JPEG-encoding, for the scan/photo
+renders) — but the invoice content itself (5 distinct fictional companies,
+line items, totals) is new to this script, not the literal T3/T5 fixtures,
+since the demo needs 5 *different* curated documents rather than reusing the
+tests' 2. `_build_invoice()` computes line/subtotal/VAT/total arithmetic from
+`Decimal` inputs so every non-broken document is internally consistent
+end-to-end (T6 raises zero validation issues on it); the `arithmetic_error`
+document uses the same builder with an explicit `total_override` to trip only
+`total_mismatch`, mirroring T5's `BROKEN_TOTAL_INVOICE` fixture. Tax ids used
+are checksum-valid ЄДРПОУ/ІПН numbers (verified against
+`services/validate.py`'s actual checksum algorithms before picking them) so
+the 4 non-broken documents don't spuriously flag `bad_tax_id`.
+
+### `seed()` takes injectable repos so idempotency is unit-testable without real credentials
+`scripts/seed_demo.py`'s `seed(*, reset, documents=None, extractions=None,
+storage=None)` builds the real Supabase-backed repos only when a repo isn't
+passed in. `tests/test_seed_demo.py` injects `MagicMock`s (plus a fake
+`ExtractionService`/`preprocess`) to exercise the actual decision logic — skip
+an already-seeded document, seed a missing one exactly once, restore from a
+snapshot on `--reset` — without ever touching the real Anthropic API or
+Supabase (per CLAUDE.md's testing conventions). Real runs (`uv run python
+scripts/seed_demo.py`) get the default real-client repos exactly as before.
+
+### `mypy_path = ["scripts"]`
+`tests/test_seed_demo.py` imports `scripts/seed_demo.py` directly (mirroring
+how `tests/fixtures/generate_fixtures.py` imports `tests/_pdfgen.py`).
+`[tool.mypy] files` only covers `app`/`tests`, so mypy couldn't resolve the
+`import seed_demo` without also being told where to look; `mypy_path =
+["scripts"]` adds it as a search path (not as a file to type-check on its
+own), and `scripts/seed_demo.py` happens to already pass strict mode as a
+result of being resolved.
