@@ -36,6 +36,11 @@ MAX_INVOICE_AGE_YEARS = 10
 # Storage object rather than exposing a public one.
 SIGNED_URL_EXPIRES_SECONDS = 3600
 
+# Confidence threshold for review highlight (docs/PLAN.md contract). The T7
+# frontend already hardcodes this value (src/state/flags.ts); T8 is the first
+# backend consumer (history list's per-document flags_count).
+REVIEW_THRESHOLD = 0.85
+
 # --- Auth placeholder -------------------------------------------------------
 # Auth is out of T2 scope (see docs/decisions.md). Until it lands, every
 # document is owned by this fixed user_id so the documents.user_id NOT NULL /

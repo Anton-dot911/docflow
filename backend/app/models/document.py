@@ -7,6 +7,7 @@ These are wire contracts for POST/GET /api/documents. Domain extraction models
 from __future__ import annotations
 
 from datetime import datetime
+from decimal import Decimal
 from enum import StrEnum
 from uuid import UUID
 
@@ -64,13 +65,21 @@ class BatchError(BaseModel):
 
 
 class DocumentListItem(BaseModel):
-    """One row of the GET /api/documents listing."""
+    """One row of the GET /api/documents listing.
+
+    `total` and `flags_count` (T8 history page) come from the document's
+    latest extraction, if any, and are `None` until extraction has run.
+    `flags_count` is the number of fields still needing review (T6 issue or
+    confidence below `settings.REVIEW_THRESHOLD` — see `services/flags.py`).
+    """
 
     id: UUID
     filename: str
     status: DocStatus
     doc_type: str | None = None
     created_at: datetime
+    total: Decimal | None = None
+    flags_count: int | None = None
 
 
 class DocumentListResponse(BaseModel):

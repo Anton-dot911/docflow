@@ -79,6 +79,28 @@ class ExtractionsRepo:
         rows = cast(list[dict[str, Any]], result.data)
         return rows[0] if rows else None
 
+    def get_latest_for_documents(self, document_ids: list[str]) -> dict[str, dict[str, Any]]:
+        """Return the latest extraction row per document_id, keyed by document_id.
+
+        One batched query instead of N+1 (T8 history list needs each row's
+        total/flags_count). Rows come back newest-first, so the first row seen
+        per document_id is the latest and later duplicates are ignored.
+        """
+        if not document_ids:
+            return {}
+        result = (
+            self._client.table(_TABLE)
+            .select("*")
+            .in_("document_id", document_ids)
+            .order("created_at", desc=True)
+            .execute()
+        )
+        rows = cast(list[dict[str, Any]], result.data)
+        latest: dict[str, dict[str, Any]] = {}
+        for row in rows:
+            latest.setdefault(row["document_id"], row)
+        return latest
+
     def update_after_edit(
         self,
         extraction_id: UUID,

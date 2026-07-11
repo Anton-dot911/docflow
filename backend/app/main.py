@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 
 from app.routes.documents import router as documents_router
+from app.routes.export import router as export_router
 from app.routes.extractions import router as extractions_router
 from app.version import get_commit_sha
 
@@ -9,6 +10,7 @@ app = FastAPI(title="docflow-backend")
 
 app.include_router(documents_router)
 app.include_router(extractions_router)
+app.include_router(export_router)
 
 
 class HealthResponse(BaseModel):

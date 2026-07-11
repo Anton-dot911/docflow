@@ -285,3 +285,107 @@ frontend; those are T8+ scope). `App.tsx` reads `id` from the query string
 and renders `ReviewPage` when present, falling back to the existing T1
 health-check skeleton otherwise. Revisit once an Upload/History page exists
 to link into Review properly.
+
+## Export & history (T8)
+
+### Migration 003 adds `documents.confirmed_at` (nullable)
+The export JSON's `meta.confirmed_at` (task spec) needs a real confirm
+timestamp, which no existing column carries. `supabase/migrations/003_export.sql`
+adds `documents.confirmed_at timestamptz` (nullable, same pattern as
+migration 002's `mode`/`pages` — additive, not a PLAN.md contract change).
+`DocumentsRepo.mark_confirmed` now stamps it (`datetime.now(UTC)`) in the same
+update that sets `status='confirmed'`. The history list also surfaces it
+implicitly through `status`, but doesn't display the timestamp itself.
+
+### `settings.REVIEW_THRESHOLD` finally implemented server-side
+docs/PLAN.md's contract names `settings.REVIEW_THRESHOLD = 0.85`, but until T8
+only the frontend had it (hardcoded in `state/flags.ts`). T8's history list
+needs a server-side flags_count per document, so `REVIEW_THRESHOLD = 0.85` was
+added to `app/config.py` and consumed by the new `services/flags.py::count_flags`
+— a field counts as "needing review" if it has a T6 validation issue at its
+path, or confidence is below the threshold (issue always wins), mirroring
+`state/flags.ts`'s `severityFor` (duplicated, not shared, per the same
+reasoning as `field_path.py`/`fieldPath.ts` in the T7 entry above).
+
+### `GET /api/documents` (T2) enriched with `total`/`flags_count`, not a new endpoint
+The task asked the history page to reuse T2's list endpoint for paging, so
+`DocumentListItem` gained two optional fields sourced from each document's
+*latest* extraction (`None` until one exists): `total` (`Decimal`, the
+payload's `total` field) and `flags_count` (int, via `count_flags`).
+`ExtractionsRepo.get_latest_for_documents` batches this in one query (`in_`
+over the page's document ids, newest-first, first-seen-per-id wins) instead of
+N+1 look-ups per row.
+
+### CSV shape: column names, quoting, filenames
+The task spec (not docs/PLAN.md, which only names the two formats) fixed the
+row/repeat/BOM/CRLF/delimiter rules; the following were judgment calls filling
+gaps in that spec:
+- **Column names** follow the `InvoiceData`/`Party` field names directly
+  (`supplier_name`, `item_unit_price`, ...) rather than inventing a separate
+  vocabulary — self-documenting against the domain model.
+- **Quoting** uses Python csv's `QUOTE_MINIMAL` (quote only fields containing
+  the delimiter, quote char, or a line terminator), not `QUOTE_ALL` — this is
+  what Excel/Sheets expect and is exercised by the golden tests on both a
+  comma-containing name (`"Кабель HDMI, 2 м"`, from the T5 clean fixture) and a
+  synthetic name with an embedded `"` character.
+- **Filenames**: `{invoice_number or document_id}.{ext}` per the task, but
+  invoice numbers can contain filesystem-unsafe characters (the clean
+  fixture's `РФ-2024/0317` has a `/`) — `export_filename_stem` replaces
+  `\/:*?"<>|` with `_` rather than dropping them, keeping the number legible.
+  `Content-Disposition` carries both an ASCII fallback (`?` for
+  non-representable chars) and the real UTF-8 name via `filename*=UTF-8''...`
+  (RFC 6266/5987), since invoice numbers/documents are routinely Cyrillic.
+- **JSON shape**: `InvoiceExport` subclasses `InvoiceData` and adds one
+  trailing `meta` field, rather than nesting the payload under a `payload` key
+  — matches the task's "the InvoiceData shape ... plus a small meta block"
+  wording literally, and keeps a downloaded file's top level identical to the
+  Review UI's `payload` shape.
+
+### 409 gate checks `status == "confirmed"` only, no extraction existence check first
+`GET /api/documents/{id}/export` 409s whenever the document isn't `confirmed`
+(task spec: "confirmed documents only — 409 for non-confirmed"). A confirmed
+document with no extraction row is a data-integrity impossibility in practice
+(nothing sets `status='confirmed'` without one), so that path 404s instead
+("document has no extraction to export") rather than getting its own status
+code — defensive, not a designed API state.
+
+### History polling: two independent effects, no shared `load` helper
+The first implementation used one `useCallback`-memoized `load` function
+invoked from both a mount/filter/offset effect and a polling `setInterval`.
+`eslint-plugin-react-hooks`'s `set-state-in-effect` rule flags any function
+that (transitively) calls `setState` when it's invoked directly at an effect
+body's top level, even if the actual state update happens asynchronously after
+an `await` — it does not flag the same call sitting inside a nested callback
+(e.g. `setInterval`'s callback). Rather than suppress the rule, the fetch was
+inlined per effect (mirroring `ReviewPage`'s existing `.then/.catch` mount
+effect): one effect fetches on mount and on `filter`/`offset` change; a second,
+independent effect starts a 5s `setInterval` only while
+`hasInFlightDocuments` is true on the current page, and its cleanup
+(`clearInterval`) is what "stops polling" once everything settles — not a
+runtime check inside the interval callback. The `loading` spinner now only
+ever covers the very first fetch (its `useState(true)` initial value); later
+fetches (filter changes, pagination, polling) swap the list in place with no
+flash back to "Завантаження…".
+
+### Manual E2E: DB layer stubbed, live Supabase migration not applied in this session
+This session had no interactive user to approve the Supabase MCP server's
+`apply_migration`/`execute_sql` tools (both require an explicit approval this
+non-interactive session cannot grant), and the environment does not expose a
+direct Postgres connection string (only the REST/service-role key) for a
+manual `psql` alternative. **Migration 003 has *not* been applied to the live
+Supabase project** — confirmed by querying `documents` columns directly
+(`mode`, `pages` present; no `confirmed_at`). Running the real
+upload→T3→T5→T6→confirm→export pipeline against that project would 500 on
+`mark_confirmed`.
+
+The manual DoD pass instead ran the real FastAPI app (`uv run`) and the real
+Vite dev server, with `DocumentsRepo`/`ExtractionsRepo`/`StorageRepo`
+dependency-overridden to in-memory fakes seeded with the T5 clean fixture plus
+one document per status (queued/processing/review/confirmed/failed) — the same
+override technique the pytest suite already uses, just scripted as a
+throwaway (uncommitted) server instead of a test. This proves the real T8 HTTP
+surface end-to-end (export byte content, headers, history list, browser
+download, row-click navigation) without writing to the shared live database.
+**Before this ships against the real project, `supabase/migrations/003_export.sql`
+still needs to be applied** (Supabase SQL editor, or `apply_migration` once
+approved).

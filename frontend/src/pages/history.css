@@ -1,0 +1,205 @@
+/*
+ * History page (T8) — layout/components on top of review.css's `.rv-app`
+ * design tokens (docs/UI_SPEC.md.md §1). Class names are BEM-ish under an
+ * `hp-` prefix, mirroring review.css's `rv-` convention.
+ */
+
+.hp-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.hp-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.hp-title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.hp-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.hp-chip {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 7px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.hp-chip--active {
+  background: var(--accent);
+  color: var(--accent-fg);
+  border-color: transparent;
+}
+
+.hp-empty {
+  color: var(--muted);
+  padding: 24px 0;
+}
+
+.hp-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.hp-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto auto;
+  align-items: center;
+  gap: 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 14px 18px;
+  cursor: pointer;
+  box-shadow: var(--shadow-soft);
+}
+
+.hp-row:hover,
+.hp-row:focus-visible {
+  border-color: var(--line-strong);
+  outline: none;
+}
+
+.hp-row__main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.hp-row__filename {
+  font-weight: 700;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hp-row__meta {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.hp-row__total {
+  font-family: "SF Mono", "Roboto Mono", ui-monospace, Menlo, Consolas, monospace;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.hp-row__flags {
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.hp-flags-count {
+  color: var(--amber);
+  font-weight: 700;
+}
+
+.hp-row__actions {
+  display: flex;
+  gap: 6px;
+}
+
+.hp-download {
+  font-size: 12px;
+  padding: 6px 10px;
+  text-decoration: none;
+}
+
+.hp-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.hp-badge--neutral {
+  background: var(--surface-2);
+  color: var(--muted);
+}
+
+.hp-badge--active {
+  background: var(--surface-3);
+  color: var(--accent);
+}
+
+.hp-badge--warn {
+  background: var(--amber-bg);
+  color: var(--amber);
+  border: 1px solid var(--amber-line);
+}
+
+.hp-badge--success {
+  background: var(--green-bg);
+  color: var(--green);
+  border: 1px solid var(--green-line);
+}
+
+.hp-badge--error {
+  background: var(--red-bg);
+  color: var(--red);
+  border: 1px solid var(--red-line);
+}
+
+.hp-pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding-top: 8px;
+}
+
+.hp-pager__label {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+@media (max-width: 720px) {
+  .hp-row {
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      "main badge"
+      "total flags"
+      "actions actions";
+  }
+  .hp-row__main {
+    grid-area: main;
+  }
+  .hp-badge {
+    grid-area: badge;
+    justify-self: end;
+  }
+  .hp-row__total {
+    grid-area: total;
+  }
+  .hp-row__flags {
+    grid-area: flags;
+    justify-self: end;
+  }
+  .hp-row__actions {
+    grid-area: actions;
+    justify-content: flex-end;
+  }
+}

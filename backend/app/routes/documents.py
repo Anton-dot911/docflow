@@ -7,6 +7,7 @@ dependencies so unit tests can override them with fakes.
 
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Annotated
 from uuid import UUID
 
@@ -39,6 +40,7 @@ from app.models.review import (
 from app.repos.documents import DocumentsRepo
 from app.repos.extractions import ExtractionsRepo
 from app.repos.storage import StorageRepo
+from app.services.flags import count_flags
 from app.services.ingestion import (
     BatchSizeError,
     IngestionService,
@@ -95,6 +97,7 @@ async def upload_documents(
 @router.get("", response_model=DocumentListResponse)
 def list_documents(
     documents: Annotated[DocumentsRepo, Depends(get_documents_repo)],
+    extractions: Annotated[ExtractionsRepo, Depends(get_extractions_repo)],
     status_filter: Annotated[DocStatus | None, Query(alias="status")] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
     offset: Annotated[int, Query(ge=0)] = 0,
@@ -105,12 +108,23 @@ def list_documents(
         limit=limit,
         offset=offset,
     )
-    return DocumentListResponse(
-        items=[DocumentListItem.model_validate(row) for row in rows],
-        total=total,
-        limit=limit,
-        offset=offset,
-    )
+    extraction_by_doc = extractions.get_latest_for_documents([row["id"] for row in rows])
+    items = []
+    for row in rows:
+        item = DocumentListItem.model_validate(row)
+        extraction = extraction_by_doc.get(row["id"])
+        if extraction is not None:
+            raw_total = extraction["payload"].get("total")
+            item = item.model_copy(
+                update={
+                    "total": Decimal(raw_total) if raw_total is not None else None,
+                    "flags_count": count_flags(
+                        extraction["field_confidences"], extraction["validation_issues"]
+                    ),
+                }
+            )
+        items.append(item)
+    return DocumentListResponse(items=items, total=total, limit=limit, offset=offset)
 
 
 @router.get("/{document_id}", response_model=DocumentDetailResponse)

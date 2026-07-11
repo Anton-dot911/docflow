@@ -95,3 +95,27 @@ export const confirmConflictSchema = z.object({
   unresolved_fields: z.array(z.string()),
 });
 export type ConfirmConflict = z.infer<typeof confirmConflictSchema>;
+
+// --- T8 History page ----------------------------------------------------------
+// Mirrors backend/app/models/document.py's DocumentListItem/DocumentListResponse
+// (GET /api/documents, extended by T8 with `total`/`flags_count` from each
+// document's latest extraction).
+
+export const documentListItemSchema = z.object({
+  id: z.string(),
+  filename: z.string(),
+  status: docStatusSchema,
+  doc_type: z.string().nullable(),
+  created_at: z.string(),
+  total: z.string().nullable(),
+  flags_count: z.number().nullable(),
+});
+export type DocumentListItem = z.infer<typeof documentListItemSchema>;
+
+export const documentListResponseSchema = z.object({
+  items: z.array(documentListItemSchema),
+  total: z.number(),
+  limit: z.number(),
+  offset: z.number(),
+});
+export type DocumentListResponse = z.infer<typeof documentListResponseSchema>;

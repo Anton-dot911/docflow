@@ -21,7 +21,7 @@ from fastapi.testclient import TestClient
 import app.services.ingestion as ingestion
 from app.main import app
 from app.models.preprocess import PreprocessedDoc
-from app.routes.documents import get_documents_repo, get_storage_repo
+from app.routes.documents import get_documents_repo, get_extractions_repo, get_storage_repo
 from app.services.ingestion import BatchSizeError, IngestionService
 
 PNG = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR" + b"\x00" * 32
@@ -58,9 +58,22 @@ def documents() -> MagicMock:
 
 
 @pytest.fixture
-def client(storage: MagicMock, documents: MagicMock) -> Iterator[TestClient]:
+def extractions() -> MagicMock:
+    # T8's list_documents enriches each row with its latest extraction (if
+    # any); default to "no extraction yet" so existing ingestion tests don't
+    # need to know about it.
+    repo = MagicMock(name="ExtractionsRepo")
+    repo.get_latest_for_documents.return_value = {}
+    return repo
+
+
+@pytest.fixture
+def client(
+    storage: MagicMock, documents: MagicMock, extractions: MagicMock
+) -> Iterator[TestClient]:
     app.dependency_overrides[get_storage_repo] = lambda: storage
     app.dependency_overrides[get_documents_repo] = lambda: documents
+    app.dependency_overrides[get_extractions_repo] = lambda: extractions
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()
@@ -227,3 +240,47 @@ def test_list_documents_returns_paged_items(client: TestClient, documents: Magic
 def test_list_documents_rejects_bad_status(client: TestClient) -> None:
     response = client.get("/api/documents", params={"status": "nonsense"})
     assert response.status_code == 422
+
+
+def test_list_documents_enriches_rows_with_latest_extraction_total_and_flags(
+    client: TestClient, documents: MagicMock, extractions: MagicMock
+) -> None:
+    rows: list[dict[str, Any]] = [
+        {
+            "id": "11111111-1111-1111-1111-111111111111",
+            "filename": "a.pdf",
+            "status": "review",
+            "doc_type": "invoice",
+            "created_at": "2026-07-07T10:00:00+00:00",
+        },
+        {
+            "id": "22222222-2222-2222-2222-222222222222",
+            "filename": "b.pdf",
+            "status": "queued",
+            "doc_type": None,
+            "created_at": "2026-07-07T09:00:00+00:00",
+        },
+    ]
+    documents.list_for_user.return_value = (rows, 2)
+    extractions.get_latest_for_documents.return_value = {
+        "11111111-1111-1111-1111-111111111111": {
+            "payload": {"total": "121380.00"},
+            "field_confidences": [
+                {"path": "total", "confidence": 0.99, "source_snippet": None},
+                {"path": "supplier.name", "confidence": 0.5, "source_snippet": None},
+            ],
+            "validation_issues": [],
+        }
+    }
+
+    response = client.get("/api/documents")
+
+    assert response.status_code == 200
+    items = response.json()["items"]
+    assert items[0]["total"] == "121380.00"
+    assert items[0]["flags_count"] == 1  # supplier.name below REVIEW_THRESHOLD
+    assert items[1]["total"] is None
+    assert items[1]["flags_count"] is None
+    extractions.get_latest_for_documents.assert_called_once_with(
+        ["11111111-1111-1111-1111-111111111111", "22222222-2222-2222-2222-222222222222"]
+    )

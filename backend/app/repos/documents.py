@@ -7,6 +7,7 @@ the caller is responsible for scoping by user_id.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Any, cast
 from uuid import UUID
 
@@ -62,10 +63,15 @@ class DocumentsRepo:
         ).execute()
 
     def mark_confirmed(self, *, document_id: UUID) -> None:
-        """Transition a document to `confirmed` (T7 Confirm action)."""
-        self._client.table(_TABLE).update({"status": "confirmed"}).eq(
-            "id", str(document_id)
-        ).execute()
+        """Transition a document to `confirmed` (T7 Confirm action).
+
+        Also stamps `confirmed_at` (migration 003), which T8's export `meta`
+        block and history list surface.
+        """
+        confirmed_at = datetime.now(UTC).isoformat()
+        self._client.table(_TABLE).update(
+            {"status": "confirmed", "confirmed_at": confirmed_at}
+        ).eq("id", str(document_id)).execute()
 
     def get_by_id(self, document_id: UUID) -> dict[str, Any] | None:
         """Return the document row, or None if it does not exist (T7)."""
