@@ -249,6 +249,15 @@
   gap: 22px;
 }
 
+/* Mobile only (the bottom bar is hidden ≥880px): reserve enough space below
+   the content that the fixed action bar never covers the last field card,
+   even with the longest field list scrolled all the way down (UI_SPEC §2/§4). */
+@media (max-width: 879.98px) {
+  .rv-wrap {
+    padding-bottom: 128px;
+  }
+}
+
 .rv-docpane {
   min-width: 0;
 }
@@ -330,7 +339,14 @@
   padding: 20px 20px 0;
 }
 
-.rv-paper__kicker {
+/* Scan paper is ALWAYS light (UI_SPEC §1), so every element INSIDE it uses the
+   scan-paper ink/text tokens, never the theme text tokens. The selectors below
+   are compound (`.rv-paper .rv-paper__*`, specificity 0,2,0) on purpose: the
+   generic `.rv-app h2` color rule (0,1,1) would otherwise force the filename to
+   the theme `--ink` — near-white in dark mode — making it invisible on the
+   white paper. Keeping every inner-text rule at this specificity guards the
+   whole subtree against theme-token leakage now and in future. */
+.rv-paper .rv-paper__kicker {
   display: block;
   color: var(--scan-paper-text);
   opacity: 0.75;
@@ -340,7 +356,7 @@
   text-transform: uppercase;
 }
 
-.rv-paper__title {
+.rv-paper .rv-paper__title {
   margin-top: 3px;
   font-size: 18px;
   font-weight: 820;
@@ -348,7 +364,7 @@
   letter-spacing: -0.04em;
 }
 
-.rv-paper__source {
+.rv-paper .rv-paper__source {
   flex: none;
   color: var(--scan-paper-text);
   background: rgba(100, 116, 139, 0.1);
@@ -668,12 +684,17 @@
 
 /* --- bottom bar (mobile) --------------------------------------------------*/
 .rv-bar {
-  position: sticky;
+  position: fixed;
+  left: 0;
+  right: 0;
   bottom: 0;
+  z-index: 20;
   display: flex;
   gap: 10px;
-  padding: 12px 0 calc(12px + env(safe-area-inset-bottom));
-  background: linear-gradient(180deg, transparent 0%, var(--bg) 34%, var(--bg) 100%);
+  width: min(100%, 1160px);
+  margin: 0 auto;
+  padding: 16px 16px calc(14px + env(safe-area-inset-bottom));
+  background: linear-gradient(180deg, transparent 0%, var(--bg) 32%, var(--bg) 100%);
 }
 
 .rv-bar .rv-btn {

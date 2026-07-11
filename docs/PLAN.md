@@ -141,9 +141,9 @@ DoD: `@pytest.mark.llm` test extracts fixture invoice with ≥80% correct fields
 `services/validate.py` pure functions: line arithmetic (qty*price=amount, sum=subtotal, subtotal+vat=total, tolerance 0.01), date sanity, EDRPOU checksum. Issues zero-out matching field confidences.
 DoD: exhaustive unit tests incl. tolerance edges and checksum vectors.
 
-**T7. Review UI.**
+**T7. Review UI.** ✅ Done (PR #7)
 Two-pane page: left document render (pdf.js / image), right schema-driven form; fields with confidence < 0.85 or validation issue highlighted; field click ⇄ snippet highlight; PATCH per edit; Confirm button.
-DoD: vitest component tests for highlight logic; manual e2e checklist in PR.
+DoD: vitest component tests for highlight logic; manual e2e checklist in PR. — met: vitest (flags/guided-nav/confirm-gate/reducer/text-search) + pytest for the 4 routes green; manual checklist in `docs/e2e-review-checklist.md`.
 
 **T8. Export & history.**
 JSON/CSV export (CSV: one row per line item, header fields repeated), history list page with statuses.

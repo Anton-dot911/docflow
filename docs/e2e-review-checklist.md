@@ -168,3 +168,58 @@ smoothing it over.
 - All documents/storage objects created during this checklist run were
   deleted afterward (`documents`, extraction rows cascade, storage objects) —
   the JSON/screenshots above are the durable record.
+
+## Finishing pass (2026-07-11) — two mobile fixes + re-run
+
+Two issues from a manual review pass were fixed and the checklist re-run
+against the real backend.
+
+**Fix 1 — dark-theme filename invisible on the scan card.** The generic
+`.rv-app h2` colour rule (specificity 0,1,1) was overriding
+`.rv-paper__title` (0,1,0), forcing the filename to the theme `--ink`
+(near-white in dark) on the always-white scan paper. The scan-paper inner
+text selectors are now compound (`.rv-paper .rv-paper__title` etc., 0,2,0) so
+the scan-paper ink/text tokens win. Verified in dark mode: title computed
+colour `rgb(17, 24, 39)` (= scan-paper ink #111827), kicker/source
+`rgb(51, 65, 85)` (= scan-paper text #334155) — all visible on white paper;
+light mode unchanged (`rgb(17, 24, 39)`).
+
+**Fix 2 — mobile action bar overlapping field cards.** The bottom bar was
+`position: sticky` with only 48px of content bottom-padding, so cards
+scrolled under it. It is now `position: fixed` (centred, safe-area padded,
+gradient scrim) with a mobile-only `padding-bottom: 128px` reserve on the
+content (bar is `display:none` ≥880px, so desktop keeps its 48px and the
+two-pane header actions). Verified at 390px scrolled fully down:
+`lastCardClearsBar: true`, `cardsCoveredByBar: 0`, bar pinned at
+viewport bottom (752–844) below the last content (bottom 706). Desktop
+regression check: bar `display:none`, wrap `padding-bottom: 48px`, header
+actions `flex`.
+
+**Re-run results (all against the real backend + Supabase, extraction seeded
+per the no-credit note above):**
+
+| Step | Result |
+|---|---|
+| 1. upload broken + clean | both `queued` with document_ids |
+| 2. GET broken → review | `status: review`, `mode: text`, `pages: 1`; one issue: `total_mismatch — subtotal 101150.00 + vat 20230.00 = 121380.00, document says 121560.00`; `total` confidence `0.0` |
+| 3. GET file | `expires_in: 3600`, signed URL on `*.supabase.co` with `token=` |
+| 4. confirm before fix | **409** `{"detail":{"message":"document has unresolved fields with confidence 0","unresolved_fields":["total"]}}` |
+| 5. PATCH `total` → `121380.00` | payload `total: "121380.00"`, confidence `1.0`, `validation_issues: []` |
+| 6. PATCH `items[0].amount` (accept as-is) | confidence `1.0`; no fields `< 0.85` remain |
+| 7. confirm after resolve | **200** `{"status":"confirmed"}`; final row `status: confirmed`, `payload.total: 121380.00` |
+| 8. clean fixture one-click | zero issues, all confidences ≥ 0.85 → confirm **200** → `confirmed` (its transient `failed` before confirm was the background worker's `mark_failed` racing the seed — the no-credit seeding artifact, not the confirm gate) |
+| 10. review_log rows | two rows written — see below |
+
+```json
+[
+  {"id": 10, "extraction_id": "87b42549-f243-4ce2-8a8f-944160636f89",
+   "field_path": "total", "old_value": "121560.00", "new_value": "121380.00",
+   "created_at": "2026-07-11T05:23:12.176267+00:00"},
+  {"id": 11, "extraction_id": "87b42549-f243-4ce2-8a8f-944160636f89",
+   "field_path": "items[0].amount", "old_value": "97500.00", "new_value": "97500.00",
+   "created_at": "2026-07-11T05:23:12.876435+00:00"}
+]
+```
+
+Row 10 is the edit (old ≠ new); row 11 is the accept-as-is (old == new) —
+both write a row. Test docs deleted after the run.

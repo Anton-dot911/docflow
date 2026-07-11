@@ -265,7 +265,7 @@ export function ReviewPage({ documentId }: ReviewPageProps) {
         </div>
       </div>
 
-      <div className="rv-bar rv-wrap">
+      <div className="rv-bar">
         <button type="button" className="rv-btn rv-btn--next" onClick={goToNextField}>
           Наступне поле
         </button>
