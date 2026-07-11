@@ -178,3 +178,107 @@ Scaffolder's T7 acceptance).
   placeholder. T1 makes no live LLM calls; model selection is revisited in
   T4/T5. Meter wiring is already present via `metered_client`; pinned to the
   `docflow` project through `create_docflow_llm` in `app/llm/__init__.py`.
+
+## Review UI (T7)
+
+### PATCH clears the matching T6 issue, not just the confidence
+`PATCH /api/extractions/{id}` (`app/routes/extractions.py`) sets the edited
+field's confidence to 1.0 **and** drops any `validation_issues` entry at that
+same path, in addition to updating `payload`. The PLAN.md contract only says
+"updates payload, sets confidence to 1.0" — clearing the issue isn't stated
+explicitly, but without it a fixed field would still render red forever
+(UI_SPEC: red = validation issue present, independent of confidence), so the
+review flow could never reach all-green. `services/validate.py` guarantees a
+1:1 correspondence between T6 issues and zeroed confidences at extraction
+time; PATCH restores that invariant after an edit. "Прийняти як є" (accept
+red as-is) and an actual correction are the same request shape — `new_value`
+equal to vs. different from the current value — so both go through one code
+path with no special-cased "accept" endpoint.
+
+### Confirm's 409 gate is confidence-0 only; the UI's gate is stricter
+`POST /api/documents/{id}/confirm` (`app/routes/documents.py`) 409s only when
+a field's confidence is exactly 0 — i.e. an unresolved T6 issue — per the
+PLAN.md route contract. Amber (low-confidence, no issue) fields do **not**
+block the backend. The frontend's `canConfirm` (`state/confirmGate.ts`) is
+stricter: it requires every field to be green (UI_SPEC §3.6, "all-green
+state"), so the Confirm button stays disabled until amber fields are also
+resolved even though the backend would accept a confirm with amber fields
+still outstanding. This is intentional headroom, not a bug — the backend
+enforces the correctness-critical case (a known-wrong value), the frontend
+UX additionally asks the operator to at least glance at every low-confidence
+field before shipping.
+
+### Dot-path get/set duplicated (not shared) between backend and frontend
+`app/services/field_path.py` (backend) and `src/state/fieldPath.ts`
+(frontend) implement the same `"items[2].amount"` navigation independently —
+the backend uses it to apply a PATCH server-side and validate the result
+against `InvoiceData`; the frontend uses it for the reducer's optimistic
+update and to read a field's current raw value for "Прийняти як є". No
+shared package exists between the two runtimes (see the T7 Scaffolder-era
+decision above about `shared/` being dropped), and the logic is ~30 lines of
+pure functions on both sides, so duplication was chosen over adding a build
+step to share it.
+
+### `GET /api/documents/{id}` exposes `mode`/`pages` beyond the stated contract
+The PLAN.md contract lists the response as "document + latest extraction
+(payload, field_confidences, validation_issues)"; `DocumentDetailResponse`
+additionally carries `mode` (`"text"|"vision"|null`, from T3 preprocessing)
+and `pages`. The Review UI needs `mode` to decide whether in-document
+text-layer search is even possible (see the next decision) — this was already
+a column on `documents` (migration 002), just not yet surfaced over HTTP.
+
+### Text-layer search / snippet-drawer fallback (UI_SPEC §3.2's "for scans/images")
+Clicking a flagged field searches the pdf.js text layer for its
+`source_snippet` (`state/textSearch.ts`'s `findSnippetItemIndices`, driven by
+`DocumentPane`) and highlights the match in the document pane. This only
+works when the original file has a real extractable text layer, i.e.
+`mode === "text"` and the file isn't an image upload (`ReviewPage`'s
+`documentSearchable`). For everything else — scans/photos in vision mode, or
+a text-mode search that doesn't find a match — the field's own inline
+"Фрагмент документа" drawer is shown instead, per the task instructions to
+document this limitation. On mobile the drawer always shows (there's no
+adjacent document pane to scroll to), matching the mockup exactly.
+
+### Document pane: renderer picked by file extension, not by T3 `mode`
+`.pdf` always renders via pdf.js (even a scanned/vision-mode PDF is a valid
+PDF — pdf.js just won't find a text layer in it); `.jpg`/`.png` always render
+as a plain `<img>`. `mode` only affects the text-search fallback above, not
+which renderer runs. pdf.js pages are re-rendered at a scale computed from the
+pane's actual container width (rather than a fixed scale + CSS resize) so the
+text layer's pdf.js-computed absolute positions land pixel-for-pixel on the
+canvas.
+
+### Source chip is a mode label, not real provenance
+The mockup's chip reads "Фото · Viber" — a specific channel DocFlow doesn't
+capture. The Review UI's chip instead reads "Скан / Фото" (`mode ===
+"vision"` or an image upload) or "PDF" — the one distinction the pipeline
+actually knows. Revisit if/when T2 ingestion starts recording a source
+channel.
+
+### `pdfjs-dist` pinned to latest (6.1.200), no version workaround needed
+`pdfjs-dist` was added as the one new frontend dependency the task
+anticipated. During manual E2E verification in this sandbox, `page.render()`
+threw `TypeError: ...getOrInsertComputed is not a function` — a very recent
+`Map.prototype` builtin pdf.js now uses internally, missing from this
+sandbox's headless Chromium (v141). Downgrading to 5.7.284 hit the same
+error (the builtin is used there too), confirming it's a browser-version
+floor rather than a bad version pick, so the pin stayed on latest. Any
+current auto-updating desktop browser has this builtin; see
+`docs/e2e-review-checklist.md` for the full root-cause trace.
+
+### Manual E2E ran against a seeded (not live-LLM) extraction
+The Anthropic key available in this environment has no credit balance, so a
+real `POST /api/documents` → T3 → T5 run 400s immediately. The manual E2E
+checklist instead writes the fixtures' known-correct `InvoiceData` payload
+straight to `extractions`, then runs the **real, unmodified**
+`services/validate.py` over it and persists through the real repos against
+the real Supabase project — so T6 onward and all of T7 (routes + UI) were
+exercised for real; only the T5 LLM call itself was substituted. Full detail
+in `docs/e2e-review-checklist.md`.
+
+### Review page reached via `?id=`, not a route
+No router or Upload/History page exists yet (T2's upload endpoint has no
+frontend; those are T8+ scope). `App.tsx` reads `id` from the query string
+and renders `ReviewPage` when present, falling back to the existing T1
+health-check skeleton otherwise. Revisit once an Upload/History page exists
+to link into Review properly.

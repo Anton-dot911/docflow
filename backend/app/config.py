@@ -31,6 +31,11 @@ VALIDATION_AMOUNT_TOLERANCE = Decimal("0.01")
 # invoice_date sanity: older than this many years -> "stale_date".
 MAX_INVOICE_AGE_YEARS = 10
 
+# --- Review UI (T7) ---------------------------------------------------------
+# GET /api/documents/{id}/file mints a short-lived signed URL to the private
+# Storage object rather than exposing a public one.
+SIGNED_URL_EXPIRES_SECONDS = 3600
+
 # --- Auth placeholder -------------------------------------------------------
 # Auth is out of T2 scope (see docs/decisions.md). Until it lands, every
 # document is owned by this fixed user_id so the documents.user_id NOT NULL /

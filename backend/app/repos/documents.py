@@ -61,6 +61,18 @@ class DocumentsRepo:
             "id", str(document_id)
         ).execute()
 
+    def mark_confirmed(self, *, document_id: UUID) -> None:
+        """Transition a document to `confirmed` (T7 Confirm action)."""
+        self._client.table(_TABLE).update({"status": "confirmed"}).eq(
+            "id", str(document_id)
+        ).execute()
+
+    def get_by_id(self, document_id: UUID) -> dict[str, Any] | None:
+        """Return the document row, or None if it does not exist (T7)."""
+        result = self._client.table(_TABLE).select("*").eq("id", str(document_id)).execute()
+        rows = cast(list[dict[str, Any]], result.data)
+        return rows[0] if rows else None
+
     def list_for_user(
         self,
         *,

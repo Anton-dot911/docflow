@@ -11,3 +11,87 @@ export const healthResponseSchema = z.object({
 });
 
 export type HealthResponse = z.infer<typeof healthResponseSchema>;
+
+// --- T7 Review UI ------------------------------------------------------------
+// Mirrors backend/app/models/domain.py + backend/app/models/review.py. Money
+// fields are Decimal server-side, serialized as numeric strings (CLAUDE.md
+// rule 7) — kept as `z.string()` here rather than coerced to `number`, so no
+// float precision is ever introduced client-side; formatting/parsing for
+// display and edits happens explicitly where needed.
+
+export const partySchema = z.object({
+  name: z.string().nullable(),
+  tax_id: z.string().nullable(),
+  address: z.string().nullable(),
+});
+export type Party = z.infer<typeof partySchema>;
+
+export const lineItemSchema = z.object({
+  name: z.string().nullable(),
+  quantity: z.string().nullable(),
+  unit_price: z.string().nullable(),
+  amount: z.string().nullable(),
+});
+export type LineItem = z.infer<typeof lineItemSchema>;
+
+export const invoiceDataSchema = z.object({
+  supplier: partySchema,
+  buyer: partySchema,
+  invoice_number: z.string().nullable(),
+  invoice_date: z.string().nullable(),
+  items: z.array(lineItemSchema),
+  subtotal: z.string().nullable(),
+  vat_amount: z.string().nullable(),
+  total: z.string().nullable(),
+});
+export type InvoiceData = z.infer<typeof invoiceDataSchema>;
+
+export const fieldConfidenceSchema = z.object({
+  path: z.string(),
+  confidence: z.number().min(0).max(1),
+  source_snippet: z.string().nullable(),
+});
+export type FieldConfidence = z.infer<typeof fieldConfidenceSchema>;
+
+export const validationIssueSchema = z.object({
+  path: z.string(),
+  code: z.string(),
+  message: z.string(),
+});
+export type ValidationIssue = z.infer<typeof validationIssueSchema>;
+
+export const extractionDetailSchema = z.object({
+  id: z.string(),
+  document_id: z.string(),
+  payload: invoiceDataSchema,
+  field_confidences: z.array(fieldConfidenceSchema),
+  validation_issues: z.array(validationIssueSchema),
+});
+export type ExtractionDetail = z.infer<typeof extractionDetailSchema>;
+
+export const docStatusSchema = z.enum(["queued", "processing", "review", "confirmed", "failed"]);
+export type DocStatus = z.infer<typeof docStatusSchema>;
+
+export const documentDetailSchema = z.object({
+  id: z.string(),
+  filename: z.string(),
+  status: docStatusSchema,
+  doc_type: z.string().nullable(),
+  mode: z.enum(["text", "vision"]).nullable(),
+  pages: z.number().nullable(),
+  created_at: z.string(),
+  extraction: extractionDetailSchema.nullable(),
+});
+export type DocumentDetail = z.infer<typeof documentDetailSchema>;
+
+export const fileUrlResponseSchema = z.object({
+  url: z.string(),
+  expires_in: z.number(),
+});
+export type FileUrlResponse = z.infer<typeof fileUrlResponseSchema>;
+
+export const confirmConflictSchema = z.object({
+  message: z.string(),
+  unresolved_fields: z.array(z.string()),
+});
+export type ConfirmConflict = z.infer<typeof confirmConflictSchema>;

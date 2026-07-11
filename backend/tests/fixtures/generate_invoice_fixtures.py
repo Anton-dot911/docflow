@@ -72,6 +72,20 @@ EXPECTED_INVOICE_TEXT: dict[str, Any] = {
     "total": "121380.00",
 }
 
+# --- Broken-total invoice (T7 manual E2E checklist) -------------------------
+# Same clean supplier/buyer/items as EXPECTED_INVOICE_TEXT, but `total` is
+# deliberately wrong (subtotal + vat = 121380.00, document says 121560.00) so
+# T6's total_mismatch check fires and the Review UI shows a red field with the
+# arithmetic message. Everything else stays internally consistent (line
+# arithmetic, subtotal, tax-id checksum) so this is the *only* validation
+# issue — a clean, single-purpose fixture for the "edit a red field -> confirm
+# succeeds" checklist step.
+BROKEN_TOTAL_INVOICE: dict[str, Any] = {
+    **EXPECTED_INVOICE_TEXT,
+    "total": "121560.00",
+}
+
+
 # --- Scan invoice (vision) — a different, simpler document ------------------
 _SCAN_LINES: list[str] = [
     "ТОВ «Будмайстер»",
@@ -95,8 +109,7 @@ _SCAN_LINES: list[str] = [
 ]
 
 
-def _build_text_pdf() -> bytes:
-    inv = EXPECTED_INVOICE_TEXT
+def _build_text_pdf(inv: dict[str, Any] = EXPECTED_INVOICE_TEXT) -> bytes:
     pdf = FPDF(format="A4", unit="mm")
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
@@ -160,7 +173,12 @@ def main() -> None:
         fh.write(_build_text_pdf())
     with open(os.path.join(HERE, "invoice_scan.jpg"), "wb") as fh:
         fh.write(_build_scan_jpeg())
-    print("wrote invoice_text.pdf, invoice_scan.jpg to", HERE)
+    with open(os.path.join(HERE, "invoice_broken_total.pdf"), "wb") as fh:
+        fh.write(_build_text_pdf(BROKEN_TOTAL_INVOICE))
+    print(
+        "wrote invoice_text.pdf, invoice_scan.jpg, invoice_broken_total.pdf to",
+        HERE,
+    )
 
 
 if __name__ == "__main__":

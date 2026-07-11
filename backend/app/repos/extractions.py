@@ -59,3 +59,45 @@ class ExtractionsRepo:
         }
         result = self._client.table(_TABLE).insert(row).execute()
         return cast(dict[str, Any], result.data[0])
+
+    def get_by_id(self, extraction_id: UUID) -> dict[str, Any] | None:
+        """Return one extraction row by id, or None (T7 PATCH target lookup)."""
+        result = self._client.table(_TABLE).select("*").eq("id", str(extraction_id)).execute()
+        rows = cast(list[dict[str, Any]], result.data)
+        return rows[0] if rows else None
+
+    def get_latest_by_document(self, document_id: UUID) -> dict[str, Any] | None:
+        """Return the most recent extraction for a document, or None (T7 GET)."""
+        result = (
+            self._client.table(_TABLE)
+            .select("*")
+            .eq("document_id", str(document_id))
+            .order("created_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+        rows = cast(list[dict[str, Any]], result.data)
+        return rows[0] if rows else None
+
+    def update_after_edit(
+        self,
+        extraction_id: UUID,
+        *,
+        payload: dict[str, Any],
+        field_confidences: list[dict[str, Any]],
+        validation_issues: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """Persist a T7 review edit: new payload/confidences/issues for one row."""
+        result = (
+            self._client.table(_TABLE)
+            .update(
+                {
+                    "payload": payload,
+                    "field_confidences": field_confidences,
+                    "validation_issues": validation_issues,
+                }
+            )
+            .eq("id", str(extraction_id))
+            .execute()
+        )
+        return cast(dict[str, Any], result.data[0])

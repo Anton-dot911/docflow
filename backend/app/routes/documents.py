@@ -8,6 +8,7 @@ dependencies so unit tests can override them with fakes.
 from __future__ import annotations
 
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import (
     APIRouter,
@@ -20,7 +21,7 @@ from fastapi import (
     status,
 )
 
-from app.config import PLACEHOLDER_USER_ID
+from app.config import PLACEHOLDER_USER_ID, SIGNED_URL_EXPIRES_SECONDS
 from app.models.document import (
     BatchError,
     DocStatus,
@@ -28,7 +29,15 @@ from app.models.document import (
     DocumentListResponse,
     UploadItemResult,
 )
+from app.models.review import (
+    ConfirmConflict,
+    ConfirmResponse,
+    DocumentDetailResponse,
+    ExtractionDetail,
+    FileUrlResponse,
+)
 from app.repos.documents import DocumentsRepo
+from app.repos.extractions import ExtractionsRepo
 from app.repos.storage import StorageRepo
 from app.services.ingestion import (
     BatchSizeError,
@@ -45,6 +54,10 @@ def get_documents_repo() -> DocumentsRepo:
 
 def get_storage_repo() -> StorageRepo:
     return StorageRepo()
+
+
+def get_extractions_repo() -> ExtractionsRepo:
+    return ExtractionsRepo()
 
 
 def get_ingestion_service(
@@ -98,3 +111,76 @@ def list_documents(
         limit=limit,
         offset=offset,
     )
+
+
+@router.get("/{document_id}", response_model=DocumentDetailResponse)
+def get_document(
+    document_id: UUID,
+    documents: Annotated[DocumentsRepo, Depends(get_documents_repo)],
+    extractions: Annotated[ExtractionsRepo, Depends(get_extractions_repo)],
+) -> DocumentDetailResponse:
+    """Document + its latest extraction (payload, confidences, issues), if any."""
+    document = documents.get_by_id(document_id)
+    if document is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="document not found")
+    extraction_row = extractions.get_latest_by_document(document_id)
+    extraction = ExtractionDetail.model_validate(extraction_row) if extraction_row else None
+    return DocumentDetailResponse(
+        id=document["id"],
+        filename=document["filename"],
+        status=document["status"],
+        doc_type=document.get("doc_type"),
+        mode=document.get("mode"),
+        pages=document.get("pages"),
+        created_at=document["created_at"],
+        extraction=extraction,
+    )
+
+
+@router.get("/{document_id}/file", response_model=FileUrlResponse)
+def get_document_file(
+    document_id: UUID,
+    documents: Annotated[DocumentsRepo, Depends(get_documents_repo)],
+    storage: Annotated[StorageRepo, Depends(get_storage_repo)],
+) -> FileUrlResponse:
+    """Short-lived signed URL to the stored file (private bucket)."""
+    document = documents.get_by_id(document_id)
+    if document is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="document not found")
+    url = storage.create_signed_url(
+        path=document["storage_path"], expires_in=SIGNED_URL_EXPIRES_SECONDS
+    )
+    return FileUrlResponse(url=url, expires_in=SIGNED_URL_EXPIRES_SECONDS)
+
+
+@router.post(
+    "/{document_id}/confirm",
+    response_model=ConfirmResponse,
+    responses={409: {"model": ConfirmConflict}},
+)
+def confirm_document(
+    document_id: UUID,
+    documents: Annotated[DocumentsRepo, Depends(get_documents_repo)],
+    extractions: Annotated[ExtractionsRepo, Depends(get_extractions_repo)],
+) -> ConfirmResponse:
+    """Confirm a document, rejecting with 409 while any field is unresolved.
+
+    "Unresolved" means confidence 0 (a T6 validation issue that was never
+    explicitly accepted): PATCH /api/extractions/{id} always sets confidence to
+    1.0, so accepting a red field as-is (same value) or editing it both clear
+    this gate. A document is never confirmed while unresolved fields remain.
+    """
+    document = documents.get_by_id(document_id)
+    if document is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="document not found")
+    extraction = extractions.get_latest_by_document(document_id)
+    if extraction is not None:
+        unresolved = [c["path"] for c in extraction["field_confidences"] if c["confidence"] == 0]
+        if unresolved:
+            conflict = ConfirmConflict(
+                message="document has unresolved fields with confidence 0",
+                unresolved_fields=unresolved,
+            )
+            raise HTTPException(status.HTTP_409_CONFLICT, detail=conflict.model_dump())
+    documents.mark_confirmed(document_id=document_id)
+    return ConfirmResponse(status=DocStatus.confirmed)

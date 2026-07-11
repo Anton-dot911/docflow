@@ -7,7 +7,7 @@ backend, never via a public URL.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
 from app.config import STORAGE_BUCKET
@@ -45,6 +45,14 @@ class StorageRepo:
             data,
             {"content-type": content_type, "upsert": "false"},
         )
+
+    def create_signed_url(self, *, path: str, expires_in: int) -> str:
+        """Mint a short-lived signed URL to a private-bucket object (T7)."""
+        result = self._client.storage.from_(self._bucket).create_signed_url(path, expires_in)
+        url = result.get("signedURL") or result.get("signedUrl")
+        if not url:
+            raise RuntimeError(f"signed url request returned no URL: {result!r}")
+        return cast(str, url)
 
     def _list_buckets(self) -> list[Any]:
         return list(self._client.storage.list_buckets())
