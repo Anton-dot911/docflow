@@ -266,15 +266,18 @@ floor rather than a bad version pick, so the pin stayed on latest. Any
 current auto-updating desktop browser has this builtin; see
 `docs/e2e-review-checklist.md` for the full root-cause trace.
 
-### Manual E2E ran against a seeded (not live-LLM) extraction
-The Anthropic key available in this environment has no credit balance, so a
-real `POST /api/documents` → T3 → T5 run 400s immediately. The manual E2E
-checklist instead writes the fixtures' known-correct `InvoiceData` payload
-straight to `extractions`, then runs the **real, unmodified**
-`services/validate.py` over it and persists through the real repos against
-the real Supabase project — so T6 onward and all of T7 (routes + UI) were
-exercised for real; only the T5 LLM call itself was substituted. Full detail
-in `docs/e2e-review-checklist.md`.
+### Manual E2E: seeded first (no credit), then re-run through the real pipeline
+The Anthropic key initially had no credit balance, so the first manual E2E
+pass substituted only the T5 call — writing the fixtures' known-correct
+`InvoiceData` straight to `extractions` and running the **real, unmodified**
+`services/validate.py` over it. Once credit was available the checklist was
+re-run fully through the actual `POST /api/documents` → T3 → T5 → T6 pipeline
+(model `claude-sonnet-4-5`): the real extraction reproduced the broken
+fixture's wrong `total=121560.00`, real T6 flagged the `total_mismatch`, and
+the 409 gate → edit / accept-as-is → 200 confirm flow ran on genuine
+extractions (the persisted row carries a real metered call:
+`cost_usd=0.03531`, `latency_ms=13301`). Full detail — including the real-run
+table and the accept-as-is demonstration — in `docs/e2e-review-checklist.md`.
 
 ### Review page reached via `?id=`, not a route
 No router or Upload/History page exists yet (T2's upload endpoint has no

@@ -6,22 +6,28 @@ invoice_broken_total.pdf` (T6 arithmetic issue on `total`, plus a low-confidence
 `items[0].amount`) and `backend/tests/fixtures/invoice_text.pdf` (the clean T5
 fixture — internally consistent, zero T6 issues).
 
-## Known blocker hit during this run: no Anthropic API credit
+## ✅ Superseded — full run through the real T5 pipeline (2026-07-11)
 
-The `ANTHROPIC_API_KEY` available in this session
-(`$METER_ANTHROPIC_API_KEY`) has **no credit balance** — every real T5
-extraction call fails immediately with `400 invalid_request_error: Your
-credit balance is too low`. This blocks running the actual T5 LLM call, so
-step 2 below substitutes it: the exact `InvoiceData` payload each fixture was
-designed to produce (from `generate_invoice_fixtures.py`'s
-`EXPECTED_INVOICE_TEXT` / `BROKEN_TOTAL_INVOICE`) is written directly to the
-`extractions` table, then the **real** `services/validate.py` (`validate_invoice`
-/ `zero_out_confidences`, unmodified, no mocking) computes the issues and
-confidences, and the **real** repos persist it against the **real** Supabase
-project. Every step from T6 onward, and all of T7 (routes + UI), runs for
-real and unmodified. This is documented here rather than silently worked
-around — a real key with credit would let step 2 run through the actual
-`POST /api/documents` → T3 preprocess → T5 extract pipeline instead.
+The Anthropic key later had credit, so the checklist was re-run end-to-end
+through the **actual** `POST /api/documents` → T3 preprocess → T5 extract →
+T6 validate pipeline — no seeding. See the "Real-pipeline run" section at the
+bottom for that evidence; it is the canonical DoD record. The seeded run and
+the original no-credit note below are kept for history.
+
+## Original note: no Anthropic API credit (resolved)
+
+At the time of the first run, the `ANTHROPIC_API_KEY`
+(`$METER_ANTHROPIC_API_KEY`) had **no credit balance** — every real T5
+extraction call failed immediately with `400 invalid_request_error: Your
+credit balance is too low`. That first pass substituted the T5 call: the exact
+`InvoiceData` payload each fixture was designed to produce (from
+`generate_invoice_fixtures.py`'s `EXPECTED_INVOICE_TEXT` /
+`BROKEN_TOTAL_INVOICE`) was written directly to the `extractions` table, then
+the **real** `services/validate.py` (`validate_invoice` / `zero_out_confidences`,
+unmodified) computed the issues/confidences and the **real** repos persisted
+it against the **real** Supabase project. Once credit was available the whole
+flow was re-run for real (see bottom section), so this substitution no longer
+gates any evidence.
 
 ## Steps
 
@@ -223,3 +229,53 @@ per the no-credit note above):**
 
 Row 10 is the edit (old ≠ new); row 11 is the accept-as-is (old == new) —
 both write a row. Test docs deleted after the run.
+
+## Real-pipeline run (2026-07-11, credit available) — canonical DoD evidence
+
+Re-run end-to-end through the **actual** T2→T3→T5→T6 pipeline (no seeding),
+`LLM_MODEL=claude-sonnet-4-5`, real Anthropic + real Supabase.
+
+**Real T5 extraction happened.** The broken fixture's persisted extraction row
+carries a genuine metered call: `model=claude-sonnet-4-5-20250929`,
+`tokens_in=5275`, `tokens_out=1299`, `cost_usd=0.03531`, `latency_ms=13301`.
+The model read the PDF and returned `subtotal=101150.00`, `vat_amount=20230.00`,
+`total=121560.00` (the document's actual — wrong — total), and the **real** T6
+`validate_invoice` flagged it:
+
+```
+status: review | mode: text | pages: 1
+validation_issues: [{"path":"total","code":"total_mismatch",
+  "message":"subtotal 101150.00 + vat 20230.00 = 121380.00, document says 121560.00"}]
+flagged (<0.85 or 0): [("total", 0.0)]
+```
+
+The clean fixture extracted `total=121380.00` (correct) with zero issues and no
+field below 0.85.
+
+| Step | Result (real pipeline) |
+|---|---|
+| upload broken + clean | both `queued`; broken walked `processing → review`, clean `queued → processing → review` (real T3+T5) |
+| GET broken | `review`, `mode: text`, real `total_mismatch` issue (message above), `total` confidence `0.0` |
+| GET file | `expires_in: 3600`, signed URL on `*.supabase.co` with `token=` |
+| confirm before fix | **409** `{"message":"document has unresolved fields with confidence 0","unresolved_fields":["total"]}` |
+| PATCH `total` → `121380.00` | payload `total: "121380.00"`, confidence `1.0`, `validation_issues: []` |
+| confirm after fix | **200** `{"status":"confirmed"}`; final broken row `status: confirmed` |
+| clean one-click confirm | **200** `{"status":"confirmed"}` (no transient `failed` this time — real pipeline set `review` cleanly, no seed race) |
+| review_log (edit) | `{"id":12,"field_path":"total","old_value":"121560.00","new_value":"121380.00"}` |
+
+**Accept-as-is path (UI_SPEC §3.4) on a separate real extraction.** A third
+real upload of the broken fixture was resolved by accepting the red `total`
+*as-is* — PATCH with its own unchanged wrong value `121560.00`:
+
+```
+total (unchanged): 121560.00 | conf now: [1.0] | issues: []
+confirm -> HTTP 200 {"status":"confirmed"}
+review_log: [{"id":13,"field_path":"total","old_value":"121560.00","new_value":"121560.00"}]  # old == new
+```
+
+This proves a red field is cleared by an explicit "Прийняти як є" (operator
+keeps the known-wrong value on purpose) exactly as by an edit — both write a
+review_log row; row 13's `old == new` is the accept-as-is signature.
+
+All real-run documents/storage objects were deleted afterward; the JSON above
+is the durable record.
