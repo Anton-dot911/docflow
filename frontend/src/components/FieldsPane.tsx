@@ -1,4 +1,4 @@
-import type { ExtractionDetail } from "../api/schemas.ts";
+import { isInvoicePayload, type ExtractionDetail } from "../api/schemas.ts";
 import type { FieldFlag } from "../state/flags.ts";
 import { fieldLabel, formatDate, formatMoney, formatPlain } from "../state/format.ts";
 import { Field } from "./Field.tsx";
@@ -10,17 +10,36 @@ interface ScalarSpec {
   formatter: (raw: string | null) => string;
 }
 
+// Schema-driven per doc_type (T10): an invoice's scalar fields are
+// supplier/buyer/invoice_number/invoice_date; an act's are the mirrored
+// contractor/customer/act_number/act_date. subtotal/vat_amount/total are
+// shared by both shapes.
 function scalarFields(extraction: ExtractionDetail): ScalarSpec[] {
   const { payload } = extraction;
+  if (isInvoicePayload(payload)) {
+    return [
+      { path: "supplier.name", raw: payload.supplier.name, formatter: formatPlain },
+      { path: "supplier.tax_id", raw: payload.supplier.tax_id, formatter: formatPlain },
+      { path: "supplier.address", raw: payload.supplier.address, formatter: formatPlain },
+      { path: "buyer.name", raw: payload.buyer.name, formatter: formatPlain },
+      { path: "buyer.tax_id", raw: payload.buyer.tax_id, formatter: formatPlain },
+      { path: "buyer.address", raw: payload.buyer.address, formatter: formatPlain },
+      { path: "invoice_number", raw: payload.invoice_number, formatter: formatPlain },
+      { path: "invoice_date", raw: payload.invoice_date, formatter: formatDate },
+      { path: "subtotal", raw: payload.subtotal, formatter: formatMoney },
+      { path: "vat_amount", raw: payload.vat_amount, formatter: formatMoney },
+      { path: "total", raw: payload.total, formatter: formatMoney },
+    ];
+  }
   return [
-    { path: "supplier.name", raw: payload.supplier.name, formatter: formatPlain },
-    { path: "supplier.tax_id", raw: payload.supplier.tax_id, formatter: formatPlain },
-    { path: "supplier.address", raw: payload.supplier.address, formatter: formatPlain },
-    { path: "buyer.name", raw: payload.buyer.name, formatter: formatPlain },
-    { path: "buyer.tax_id", raw: payload.buyer.tax_id, formatter: formatPlain },
-    { path: "buyer.address", raw: payload.buyer.address, formatter: formatPlain },
-    { path: "invoice_number", raw: payload.invoice_number, formatter: formatPlain },
-    { path: "invoice_date", raw: payload.invoice_date, formatter: formatDate },
+    { path: "contractor.name", raw: payload.contractor.name, formatter: formatPlain },
+    { path: "contractor.tax_id", raw: payload.contractor.tax_id, formatter: formatPlain },
+    { path: "contractor.address", raw: payload.contractor.address, formatter: formatPlain },
+    { path: "customer.name", raw: payload.customer.name, formatter: formatPlain },
+    { path: "customer.tax_id", raw: payload.customer.tax_id, formatter: formatPlain },
+    { path: "customer.address", raw: payload.customer.address, formatter: formatPlain },
+    { path: "act_number", raw: payload.act_number, formatter: formatPlain },
+    { path: "act_date", raw: payload.act_date, formatter: formatDate },
     { path: "subtotal", raw: payload.subtotal, formatter: formatMoney },
     { path: "vat_amount", raw: payload.vat_amount, formatter: formatMoney },
     { path: "total", raw: payload.total, formatter: formatMoney },
@@ -79,7 +98,12 @@ export function FieldsPane({
 
       <span className="rv-section-label">Позиції</span>
       <ItemsTable
-        items={extraction.payload.items}
+        items={
+          isInvoicePayload(extraction.payload)
+            ? extraction.payload.items
+            : extraction.payload.services
+        }
+        pathPrefix={isInvoicePayload(extraction.payload) ? "items" : "services"}
         flagByPath={flagByPath}
         openPath={openPath}
         pendingPath={pendingPath}

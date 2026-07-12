@@ -7,6 +7,10 @@ import { fieldDomId } from "./Field.tsx";
 
 interface ItemsTableProps {
   items: LineItem[];
+  // "items" for an invoice, "services" for an act (T10) — picks the dot-path
+  // prefix so generated paths ("items[0].amount" / "services[0].amount")
+  // match the backend's FieldConfidence/ValidationIssue paths.
+  pathPrefix: "items" | "services";
   flagByPath: Map<string, FieldFlag>;
   openPath: string | null;
   pendingPath: string | null;
@@ -27,6 +31,7 @@ function cellClass(severity: FlagSeverity | undefined): string {
 // as a scalar field, in an expansion row directly under it.
 export function ItemsTable({
   items,
+  pathPrefix,
   flagByPath,
   openPath,
   pendingPath,
@@ -48,7 +53,7 @@ export function ItemsTable({
         </thead>
         <tbody>
           {items.map((item, index) => {
-            const amountPath = `items[${index}].amount`;
+            const amountPath = `${pathPrefix}[${index}].amount`;
             const amountFlag = flagByPath.get(amountPath);
             const isOpen = openPath === amountPath;
             return (

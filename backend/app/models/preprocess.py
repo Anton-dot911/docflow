@@ -22,12 +22,18 @@ class PreprocessedDoc(BaseModel):
       non-empty, `text` None).
     `pages` is the number of pages actually processed (capped in T3 — see
     `services/preprocess.py` and docs/decisions.md).
+
+    `first_page_text` (T10) additionally carries just page 1's text in text
+    mode, so the classifier can send page 1 only per its task spec without
+    re-parsing the source bytes; unset in vision mode, where `images[0]` is
+    already page 1 on its own.
     """
 
     mode: PreprocessMode
     text: str | None = None
     images: list[bytes] | None = None
     pages: int
+    first_page_text: str | None = None
 
     @model_validator(mode="after")
     def _check_mode_invariants(self) -> PreprocessedDoc:

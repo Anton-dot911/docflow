@@ -1,9 +1,15 @@
 """HTTP layer for the T7 Review UI's single-field edit endpoint.
 
 Thin: resolve the extraction row, apply the edit via `app.services.field_path`,
-revalidate the whole payload against `InvoiceData` (money/date coercion +
-schema safety), persist, and write a `review_log` row. Repos are provided via
-FastAPI dependencies so unit tests can override them with fakes.
+revalidate the whole payload (money/date coercion + schema safety), persist,
+and write a `review_log` row. Repos are provided via FastAPI dependencies so
+unit tests can override them with fakes.
+
+Revalidation uses the `InvoiceData | ActData` union (T10): a plain
+`InvoiceData.model_validate` would reject any act payload's `services`/
+`contractor`/`customer` shape, so a `TypeAdapter` over the union picks
+whichever of the two the edited payload actually matches — the same
+smart-union approach `ExtractionResult.payload` already uses.
 """
 
 from __future__ import annotations
@@ -12,10 +18,10 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from pydantic import ValidationError
+from pydantic import TypeAdapter, ValidationError
 
 from app.demo_data import is_demo_document_id
-from app.models.domain import FieldConfidence, InvoiceData
+from app.models.domain import ActData, FieldConfidence, InvoiceData
 from app.models.review import ExtractionDetail, PatchExtractionRequest
 from app.repos.extractions import ExtractionsRepo
 from app.repos.review_log import ReviewLogRepo
@@ -23,6 +29,8 @@ from app.services.demo_guard import enforce_demo_document_rate_limit
 from app.services.field_path import FieldPathError, get_field_value, set_field_value
 
 router = APIRouter(prefix="/api/extractions", tags=["extractions"])
+
+_PayloadAdapter: TypeAdapter[InvoiceData | ActData] = TypeAdapter(InvoiceData | ActData)
 
 
 def get_extractions_repo() -> ExtractionsRepo:
@@ -64,7 +72,7 @@ def patch_extraction(
     try:
         old_value = get_field_value(payload, body.field_path)
         new_payload = set_field_value(payload, body.field_path, body.new_value)
-        validated_payload = InvoiceData.model_validate(new_payload)
+        validated_payload = _PayloadAdapter.validate_python(new_payload)
     except (FieldPathError, ValidationError) as error:
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_CONTENT,

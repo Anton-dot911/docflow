@@ -1,4 +1,4 @@
-import type { ExtractionDetail, InvoiceData } from "../api/schemas.ts";
+import type { ExtractionDetail, ExtractionPayload } from "../api/schemas.ts";
 import { setFieldValue } from "./fieldPath.ts";
 
 // Optimistic PATCH + rollback for the Review page. An edit (or an "Прийняти
@@ -34,7 +34,7 @@ function applyOptimisticEdit(
     extraction.payload as unknown as Record<string, unknown>,
     path,
     value,
-  ) as unknown as InvoiceData;
+  ) as unknown as ExtractionPayload;
   const fieldConfidences = extraction.field_confidences.map((c) =>
     c.path === path ? { ...c, confidence: 1 } : c,
   );

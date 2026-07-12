@@ -189,7 +189,10 @@ export function ReviewPage({ documentId }: ReviewPageProps) {
   }
 
   const confirmed = doc.status === "confirmed";
-  const confirmReady = allResolved && !confirmed;
+  // An "unrecognized document type" result (T10: doc_type other/low-confidence)
+  // reaches status=review with no extraction row — there is nothing to confirm.
+  const unrecognized = doc.status === "review" && !doc.extraction;
+  const confirmReady = allResolved && !!reviewState && !confirmed;
 
   return (
     <div className="rv-app" data-theme={theme}>
@@ -258,6 +261,11 @@ export function ReviewPage({ documentId }: ReviewPageProps) {
                 onSubmitEdit={(path, value) => void submitEdit(path, value)}
                 onAcceptAsIs={acceptAsIs}
               />
+            ) : unrecognized ? (
+              <p role="alert">
+                Не вдалося розпізнати тип документа (не рахунок і не акт) — екстракцію не виконано.
+                Перевірте файл вручну.
+              </p>
             ) : (
               <p>Документ ще обробляється — поля з’являться після екстракції.</p>
             )}

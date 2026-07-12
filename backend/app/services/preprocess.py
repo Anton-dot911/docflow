@@ -109,7 +109,11 @@ def _preprocess_pdf(content: bytes) -> PreprocessedDoc:
 
         if text_coverage_ratio(pages_text) >= TEXT_MODE_THRESHOLD:
             text = "\n\n".join(pages_text).strip()
-            return PreprocessedDoc(mode="text", text=text, pages=n_pages)
+            page1 = pages_text[0].strip() if pages_text else ""
+            first_page_text = page1 if page1 else text
+            return PreprocessedDoc(
+                mode="text", text=text, pages=n_pages, first_page_text=first_page_text
+            )
 
         images: list[bytes] = []
         for i in range(n_pages):

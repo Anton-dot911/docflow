@@ -22,7 +22,7 @@ from conftest import MockLlm
 import app.services.ingestion as ingestion
 from app.llm import client as llm_client
 from app.llm.client import LlmError
-from app.models.domain import DocType, ExtractionResult
+from app.models.domain import Classification, DocType, ExtractionResult
 from app.models.preprocess import PreprocessedDoc
 from app.services.extract import ExtractionService
 
@@ -179,6 +179,11 @@ def test_pipeline_marks_failed_when_extraction_raises(monkeypatch: pytest.Monkey
         "preprocess",
         lambda content: PreprocessedDoc(mode="text", text="some invoice text", pages=1),
     )
+    monkeypatch.setattr(
+        ingestion,
+        "classify_document",
+        lambda doc: Classification(doc_type=DocType.invoice, confidence=0.99),
+    )
 
     def _boom(**kwargs: Any) -> None:
         raise LlmError("model returned no structured_output tool call")
@@ -238,12 +243,19 @@ def test_pipeline_reaches_review_despite_validation_issues(
         "preprocess",
         lambda content: PreprocessedDoc(mode="text", text="some invoice text", pages=1),
     )
+    monkeypatch.setattr(
+        ingestion,
+        "classify_document",
+        lambda doc: Classification(doc_type=DocType.invoice, confidence=0.99),
+    )
     mock_llm.create.return_value = _response(BROKEN_TOTAL_PAYLOAD)
     service = _service(mock_llm, repo)
     monkeypatch.setattr(
         ingestion,
         "extract_document",
-        lambda *, document_id, doc: service.extract(document_id=document_id, doc=doc),
+        lambda *, document_id, doc, doc_type=DocType.invoice: service.extract(
+            document_id=document_id, doc=doc, doc_type=doc_type
+        ),
     )
 
     document_id = uuid4()

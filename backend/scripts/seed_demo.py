@@ -56,6 +56,7 @@ from _pdfgen import build_image_pdf
 from app.config import DEMO_USER_ID
 from app.demo_data import DEMO_DOCUMENTS, DemoDocSpec
 from app.llm import create_docflow_llm
+from app.models.domain import DocType
 from app.repos.documents import DocumentsRepo
 from app.repos.extractions import ExtractionsRepo
 from app.repos.storage import StorageRepo, build_storage_path
@@ -146,6 +147,93 @@ def _build_invoice(
         "vat_amount": _money(vat),
         "total": _money(total),
     }
+
+
+def _build_act(
+    *,
+    contractor_name: str,
+    contractor_tax_id: str,
+    contractor_address: str,
+    customer_name: str,
+    customer_tax_id: str,
+    customer_address: str,
+    act_number: str,
+    act_date: date,
+    services: list[_Item],
+) -> dict[str, Any]:
+    """Build an internally-consistent act dict (qty*price=amount etc.), T10.
+
+    Mirrors `_build_invoice`'s shape one-for-one, under `ActData`'s field
+    names (contractor/customer/act_number/act_date/services)."""
+    line_items = []
+    subtotal = Decimal("0")
+    for svc in services:
+        amount = (svc.quantity * svc.unit_price).quantize(_CENTS, rounding=ROUND_HALF_UP)
+        subtotal += amount
+        line_items.append(
+            {
+                "name": svc.name,
+                "quantity": str(svc.quantity),
+                "unit_price": _money(svc.unit_price),
+                "amount": _money(amount),
+            }
+        )
+    vat = (subtotal * Decimal("0.2")).quantize(_CENTS, rounding=ROUND_HALF_UP)
+    total = subtotal + vat
+    return {
+        "contractor": {
+            "name": contractor_name,
+            "tax_id": contractor_tax_id,
+            "address": contractor_address,
+        },
+        "customer": {"name": customer_name, "tax_id": customer_tax_id, "address": customer_address},
+        "act_number": act_number,
+        "act_date": _ua_date(act_date),
+        "services": line_items,
+        "subtotal": _money(subtotal),
+        "vat_amount": _money(vat),
+        "total": _money(total),
+    }
+
+
+def _render_text_act_pdf(act: dict[str, Any]) -> bytes:
+    """Render a born-digital акт виконаних робіт PDF (real Cyrillic text layer)."""
+    pdf = FPDF(format="A4", unit="mm")
+    pdf.set_auto_page_break(auto=True, margin=15)
+    pdf.add_page()
+    pdf.add_font("DejaVu", "", FONT_PATH)
+    pdf.add_font("DejaVu", "B", FONT_BOLD_PATH)
+
+    def line(text: str, size: int = 11, style: str = "") -> None:
+        pdf.set_font("DejaVu", style, size)
+        pdf.cell(0, 6, text, new_x="LMARGIN", new_y="NEXT")
+
+    line(f"АКТ № {act['act_number']}", size=13, style="B")
+    line("приймання-передачі виконаних робіт (наданих послуг)", size=13, style="B")
+    line(f"від {act['act_date']}")
+    line("")
+    line(f"Виконавець: {act['contractor']['name']}")
+    line(f"ЄДРПОУ {act['contractor']['tax_id']}")
+    line(act["contractor"]["address"])
+    line("")
+    line(f"Замовник: {act['customer']['name']}")
+    line(f"ЄДРПОУ/ІПН {act['customer']['tax_id']}")
+    line(act["customer"]["address"])
+    line("")
+    line("№    Найменування послуги               К-сть    Ціна        Сума", style="B")
+    for i, svc in enumerate(act["services"], start=1):
+        line(
+            f"{i}    {svc['name']:<32} {svc['quantity']:>4}    "
+            f"{svc['unit_price']:>9}   {svc['amount']:>10}"
+        )
+    line("")
+    line(f"Разом без ПДВ:                                          {act['subtotal']}")
+    line(f"ПДВ 20%:                                               {act['vat_amount']}")
+    line(f"Всього:                                                {act['total']}", style="B")
+    line("")
+    line("Роботи виконано в повному обсязі, претензій сторони не мають.")
+
+    return bytes(pdf.output())
 
 
 def _render_text_pdf(inv: dict[str, Any], *, page_break_after_item: int | None = None) -> bytes:
@@ -379,12 +467,36 @@ def _arithmetic_error_pdf() -> bytes:
     return _render_text_pdf(inv)
 
 
+def _clean_act_pdf() -> bytes:
+    act = _build_act(
+        contractor_name="ТОВ «ДокФлоу Сервіс»",
+        contractor_tax_id="30000003",
+        contractor_address="м. Дніпро, вул. Європейська, 10",
+        customer_name="ТОВ «Мегабуд»",
+        customer_tax_id="3211500104",
+        customer_address="м. Одеса, вул. Дерибасівська, 3",
+        act_number="ДЕМО-А-0001",
+        act_date=date.today() - timedelta(days=7),
+        services=[
+            _Item("Технічне обслуговування обладнання", Decimal("1"), Decimal("8500.00")),
+            _Item("Консультаційні послуги", Decimal("4"), Decimal("1200.00")),
+            _Item("Ремонт мережевого обладнання", Decimal("2"), Decimal("950.00")),
+        ],
+    )
+    return _render_text_act_pdf(act)
+
+
+# doc_type routing (T10): every existing demo key is an invoice; the new
+# act_clean key is the first non-invoice demo document.
+_DOC_TYPE_BY_KEY: dict[str, DocType] = {"act_clean": DocType.act}
+
 _FIXTURE_BUILDERS: dict[str, Any] = {
     "clean_text": _clean_text_pdf,
     "good_scan": _good_scan_pdf,
     "low_quality_photo": _low_quality_photo_jpg,
     "multi_page": _multi_page_pdf,
     "arithmetic_error": _arithmetic_error_pdf,
+    "act_clean": _clean_act_pdf,
 }
 
 
@@ -428,15 +540,19 @@ def _seed_one(
         storage_path=storage_path,
     )
     documents.set_status(document_id=spec.document_id, status="processing")
+    doc_type = _DOC_TYPE_BY_KEY.get(spec.key, DocType.invoice)
     try:
         preprocessed = preprocess(content)
         service = ExtractionService(llm=create_docflow_llm(component="demo-seed"))
-        service.extract(document_id=spec.document_id, doc=preprocessed)
+        service.extract(document_id=spec.document_id, doc=preprocessed, doc_type=doc_type)
     except Exception as error:
         documents.mark_failed(document_id=spec.document_id, error=f"demo seed failed: {error}")
         raise
     documents.mark_reviewable(
-        document_id=spec.document_id, mode=preprocessed.mode, pages=preprocessed.pages
+        document_id=spec.document_id,
+        mode=preprocessed.mode,
+        pages=preprocessed.pages,
+        doc_type=doc_type.value,
     )
 
     row = extractions.get_latest_by_document(spec.document_id)

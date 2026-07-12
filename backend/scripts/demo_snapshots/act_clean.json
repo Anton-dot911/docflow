@@ -1,0 +1,157 @@
+{
+  "field_confidences": [
+    {
+      "confidence": 0.99,
+      "path": "contractor.name",
+      "source_snippet": "ТОВ «ДокФлоу Сервіс»"
+    },
+    {
+      "confidence": 0.99,
+      "path": "contractor.tax_id",
+      "source_snippet": "ЄДРПОУ 30000003"
+    },
+    {
+      "confidence": 0.98,
+      "path": "contractor.address",
+      "source_snippet": "м. Дніпро, вул. Європейська, 10"
+    },
+    {
+      "confidence": 0.99,
+      "path": "customer.name",
+      "source_snippet": "ТОВ «Мегабуд»"
+    },
+    {
+      "confidence": 0.98,
+      "path": "customer.tax_id",
+      "source_snippet": "ЄДРПОУ/ІПН 3211500104"
+    },
+    {
+      "confidence": 0.98,
+      "path": "customer.address",
+      "source_snippet": "м. Одеса, вул. Дерибасівська, 3"
+    },
+    {
+      "confidence": 0.99,
+      "path": "act_number",
+      "source_snippet": "АКТ № ДЕМО-А-0001"
+    },
+    {
+      "confidence": 0.99,
+      "path": "act_date",
+      "source_snippet": "від 5 липня 2026 р."
+    },
+    {
+      "confidence": 0.99,
+      "path": "services[0].name",
+      "source_snippet": "Технічне обслуговування обладнання"
+    },
+    {
+      "confidence": 0.99,
+      "path": "services[0].quantity",
+      "source_snippet": "1"
+    },
+    {
+      "confidence": 0.99,
+      "path": "services[0].unit_price",
+      "source_snippet": "8500.00"
+    },
+    {
+      "confidence": 0.99,
+      "path": "services[0].amount",
+      "source_snippet": "8500.00"
+    },
+    {
+      "confidence": 0.99,
+      "path": "services[1].name",
+      "source_snippet": "Консультаційні послуги"
+    },
+    {
+      "confidence": 0.99,
+      "path": "services[1].quantity",
+      "source_snippet": "4"
+    },
+    {
+      "confidence": 0.99,
+      "path": "services[1].unit_price",
+      "source_snippet": "1200.00"
+    },
+    {
+      "confidence": 0.99,
+      "path": "services[1].amount",
+      "source_snippet": "4800.00"
+    },
+    {
+      "confidence": 0.99,
+      "path": "services[2].name",
+      "source_snippet": "Ремонт мережевого обладнання"
+    },
+    {
+      "confidence": 0.99,
+      "path": "services[2].quantity",
+      "source_snippet": "2"
+    },
+    {
+      "confidence": 0.99,
+      "path": "services[2].unit_price",
+      "source_snippet": "950.00"
+    },
+    {
+      "confidence": 0.99,
+      "path": "services[2].amount",
+      "source_snippet": "1900.00"
+    },
+    {
+      "confidence": 0.99,
+      "path": "subtotal",
+      "source_snippet": "Разом без ПДВ: 15200.00"
+    },
+    {
+      "confidence": 0.99,
+      "path": "vat_amount",
+      "source_snippet": "ПДВ 20%: 3040.00"
+    },
+    {
+      "confidence": 0.99,
+      "path": "total",
+      "source_snippet": "Всього: 18240.00"
+    }
+  ],
+  "payload": {
+    "act_date": "2026-07-05",
+    "act_number": "ДЕМО-А-0001",
+    "contractor": {
+      "address": "м. Дніпро, вул. Європейська, 10",
+      "name": "ТОВ «ДокФлоу Сервіс»",
+      "tax_id": "30000003"
+    },
+    "customer": {
+      "address": "м. Одеса, вул. Дерибасівська, 3",
+      "name": "ТОВ «Мегабуд»",
+      "tax_id": "3211500104"
+    },
+    "services": [
+      {
+        "amount": "8500.00",
+        "name": "Технічне обслуговування обладнання",
+        "quantity": "1",
+        "unit_price": "8500.00"
+      },
+      {
+        "amount": "4800.00",
+        "name": "Консультаційні послуги",
+        "quantity": "4",
+        "unit_price": "1200.00"
+      },
+      {
+        "amount": "1900.00",
+        "name": "Ремонт мережевого обладнання",
+        "quantity": "2",
+        "unit_price": "950.00"
+      }
+    ],
+    "subtotal": "15200.00",
+    "total": "18240.00",
+    "vat_amount": "3040.00"
+  },
+  "validation_issues": []
+}

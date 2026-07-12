@@ -1,4 +1,4 @@
-"""Invoice extraction pipeline (T5).
+"""Invoice/act extraction pipeline (T5, routed by doc_type in T10).
 
 Turns a `PreprocessedDoc` (T3) into a validated `ExtractionResult` and persists
 it to the `extractions` table with the call's cost/latency. Both preprocessing
@@ -10,11 +10,14 @@ modes are supported:
 
 The structured call goes through the T4 `call_structured_metered` wrapper with
 `ExtractionResult` as the output model (tool-use schema + validate + single
-retry). `doc_type` is fixed to `"invoice"` for now — classification is T10.
+retry). `doc_type` selects the prompt file (T10 `classify_document` decides
+which extractor to route to; it defaults to `invoice` here so pre-T10 callers/
+tests that never pass `doc_type` are unaffected).
 
-After extraction, T6's `services/validate.py` runs deterministic checks
-(arithmetic, date sanity, tax-id checksum) against the payload; every issue
-zeroes that field's confidence before persistence so the Review UI flags it.
+After extraction, T6's `services/validate.py` (generalized in T10 to cover
+`ActData` too) runs deterministic checks (arithmetic, date sanity, tax-id
+checksum) against the payload; every issue zeroes that field's confidence
+before persistence so the Review UI flags it.
 """
 
 from __future__ import annotations
@@ -27,9 +30,12 @@ from app.llm import Llm, create_docflow_llm
 from app.models.domain import DocType, ExtractionResult
 from app.models.preprocess import PreprocessedDoc
 from app.repos.extractions import ExtractionsRepo
-from app.services.validate import validate_invoice, zero_out_confidences
+from app.services.validate import validate_document, zero_out_confidences
 
-PROMPT_FILE = "prompts/extract_invoice.v1.md"
+_PROMPT_BY_DOC_TYPE: dict[DocType, str] = {
+    DocType.invoice: "prompts/extract_invoice.v1.md",
+    DocType.act: "prompts/extract_act.v1.md",
+}
 
 # T3 always encodes vision pages as PNG (see services/preprocess.py).
 _IMAGE_MEDIA_TYPE = "image/png"
@@ -69,24 +75,29 @@ class ExtractionService:
         self._llm = llm or create_docflow_llm(component="extract")
         self._extractions = extractions or ExtractionsRepo()
 
-    def extract(self, *, document_id: UUID, doc: PreprocessedDoc) -> ExtractionResult:
-        """Extract invoice fields from `doc`, persist the row, return the result.
+    def extract(
+        self, *, document_id: UUID, doc: PreprocessedDoc, doc_type: DocType = DocType.invoice
+    ) -> ExtractionResult:
+        """Extract `doc_type` fields from `doc`, persist the row, return the result.
 
-        Raises whatever the LLM layer raises (e.g. `LlmError`) or the repo raises
-        on a failed insert; the caller (background worker) turns that into a
-        `failed` document status rather than dropping it silently.
+        `doc_type` picks the prompt file (invoice/act); it defaults to
+        `invoice` so pre-T10 callers keep working unchanged. Raises whatever
+        the LLM layer raises (e.g. `LlmError`) or the repo raises on a failed
+        insert; the caller (background worker) turns that into a `failed`
+        document status rather than dropping it silently.
         """
         content = _build_content(doc)
+        prompt_file = _PROMPT_BY_DOC_TYPE[doc_type]
         result, metrics = self._llm.call_structured_metered(
-            None, PROMPT_FILE, content, ExtractionResult
+            None, prompt_file, content, ExtractionResult
         )
-        # Classification is T10; force the type for now so the persisted row is
-        # unambiguous regardless of what the model echoed back.
-        result = result.model_copy(update={"doc_type": DocType.invoice})
+        # The router (T10 classify_document) already decided doc_type; force it
+        # so the persisted row is unambiguous regardless of what the model echoed.
+        result = result.model_copy(update={"doc_type": doc_type})
 
         # T6: deterministic validation. Every issue zeroes its field's
         # confidence so the Review UI flags it alongside low-confidence fields.
-        issues = validate_invoice(result.payload)
+        issues = validate_document(result.payload)
         confidences = zero_out_confidences(result.confidences, issues)
         result = result.model_copy(update={"confidences": confidences})
 
@@ -104,11 +115,13 @@ class ExtractionService:
         return result
 
 
-def extract_document(*, document_id: UUID, doc: PreprocessedDoc) -> ExtractionResult:
+def extract_document(
+    *, document_id: UUID, doc: PreprocessedDoc, doc_type: DocType = DocType.invoice
+) -> ExtractionResult:
     """Module-level seam used by the ingestion background worker.
 
     Builds a default `ExtractionService` (real LLM + repo) and runs it. Unit
     tests of the worker monkeypatch this symbol; the service itself is unit-
     tested directly with injected fakes.
     """
-    return ExtractionService().extract(document_id=document_id, doc=doc)
+    return ExtractionService().extract(document_id=document_id, doc=doc, doc_type=doc_type)

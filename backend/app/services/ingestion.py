@@ -2,8 +2,9 @@
 
 Validates an upload batch (count, magic-byte type, size), stores accepted files
 in Supabase Storage, creates queued `documents` rows, and schedules a background
-task that runs real preprocessing (T3): queued -> processing -> preprocess ->
-review (or failed). Classification/extraction (T4+) slot in before `review`.
+task that runs real preprocessing (T3), classification (T10) and extraction
+(T5/T10): queued -> processing -> preprocess -> classify -> extract -> review
+(or failed).
 
 Batch semantics: partial success. Valid files are accepted (stored + queued);
 invalid files are rejected individually with a machine-readable reason, and the
@@ -20,6 +21,7 @@ from uuid import UUID, uuid4
 from fastapi import BackgroundTasks
 
 from app.config import (
+    CLASSIFY_REVIEW_CONFIDENCE_THRESHOLD,
     MAX_FILE_SIZE_BYTES,
     MAX_FILES_PER_REQUEST,
     MIN_FILES_PER_REQUEST,
@@ -31,8 +33,10 @@ from app.models.document import (
     UploadItemStatus,
     UploadReason,
 )
+from app.models.domain import DocType
 from app.repos.documents import DocumentsRepo
 from app.repos.storage import StorageRepo, build_storage_path
+from app.services.classify import classify_document
 from app.services.extract import extract_document
 from app.services.filetypes import content_type_for, sniff_type
 from app.services.preprocess import preprocess
@@ -82,14 +86,24 @@ def _validate(payload: UploadFilePayload) -> _Validated:
 
 
 def _run_pipeline(documents: DocumentsRepo, document_id: UUID, content: bytes) -> None:
-    """Background worker: queued -> processing -> preprocess -> extract -> review.
+    """Background worker: queued -> processing -> preprocess -> classify ->
+    extract -> review.
 
     Marks the row `processing`, turns the uploaded bytes into a `PreprocessedDoc`
-    (T3), runs invoice extraction (T5) which persists the `extractions` row, then
-    advances to `review` recording `mode`/`pages`. A failure in either stage
-    moves the row to `failed` with the error message stored, so a document is
-    never stranded in `processing` and an extraction failure is never a silent
-    drop.
+    (T3), classifies page 1 (T10) to pick `doc_type`, then either:
+
+    - routes to the matching extractor (T5 invoice / T10 act), which persists
+      the `extractions` row, then advances to `review` recording
+      `mode`/`pages`/`doc_type`; or
+    - when `doc_type` is `other` or the classifier's confidence is below
+      `CLASSIFY_REVIEW_CONFIDENCE_THRESHOLD`, skips extraction entirely and
+      advances straight to `review` with `doc_type` set but no `extractions`
+      row — the Review UI shows a friendly "unrecognized document type"
+      message instead of a fields form (see `DocumentsRepo.mark_reviewable`).
+
+    A failure in preprocessing/classification/extraction moves the row to
+    `failed` with the error message stored, so a document is never stranded in
+    `processing` and a failure is never a silent drop.
 
     The already-read upload bytes are handed in directly rather than re-fetched
     from Storage: FastAPI BackgroundTasks run in-process right after the response,
@@ -102,11 +116,32 @@ def _run_pipeline(documents: DocumentsRepo, document_id: UUID, content: bytes) -
         documents.mark_failed(document_id=document_id, error=f"preprocess failed: {error}")
         return
     try:
-        extract_document(document_id=document_id, doc=result)
+        classification = classify_document(result)
+    except Exception as error:  # classification failure -> failed, never a silent drop
+        documents.mark_failed(document_id=document_id, error=f"classification failed: {error}")
+        return
+    if (
+        classification.doc_type == DocType.other
+        or classification.confidence < CLASSIFY_REVIEW_CONFIDENCE_THRESHOLD
+    ):
+        documents.mark_reviewable(
+            document_id=document_id,
+            mode=result.mode,
+            pages=result.pages,
+            doc_type=classification.doc_type.value,
+        )
+        return
+    try:
+        extract_document(document_id=document_id, doc=result, doc_type=classification.doc_type)
     except Exception as error:  # extraction failure -> failed, never a silent drop
         documents.mark_failed(document_id=document_id, error=f"extraction failed: {error}")
         return
-    documents.mark_reviewable(document_id=document_id, mode=result.mode, pages=result.pages)
+    documents.mark_reviewable(
+        document_id=document_id,
+        mode=result.mode,
+        pages=result.pages,
+        doc_type=classification.doc_type.value,
+    )
 
 
 class IngestionService:

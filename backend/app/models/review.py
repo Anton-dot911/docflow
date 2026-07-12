@@ -15,7 +15,7 @@ from uuid import UUID
 from pydantic import BaseModel
 
 from app.models.document import DocStatus
-from app.models.domain import FieldConfidence, InvoiceData, ValidationIssue
+from app.models.domain import ActData, FieldConfidence, InvoiceData, ValidationIssue
 
 
 class ExtractionDetail(BaseModel):
@@ -23,7 +23,7 @@ class ExtractionDetail(BaseModel):
 
     id: UUID
     document_id: UUID
-    payload: InvoiceData
+    payload: InvoiceData | ActData
     field_confidences: list[FieldConfidence]
     validation_issues: list[ValidationIssue]
 

@@ -30,6 +30,17 @@ const LABELS: Record<string, string> = {
   "buyer.address": "Адреса покупця",
   invoice_number: "Номер накладної",
   invoice_date: "Дата",
+  // Act fields (T10): contractor/customer mirror supplier/buyer, act_number/
+  // act_date mirror invoice_number/invoice_date. subtotal/vat_amount/total
+  // are shared with InvoiceData, so no separate entries are needed.
+  "contractor.name": "Виконавець",
+  "contractor.tax_id": "ЄДРПОУ/ІПН виконавця",
+  "contractor.address": "Адреса виконавця",
+  "customer.name": "Замовник",
+  "customer.tax_id": "ЄДРПОУ/ІПН замовника",
+  "customer.address": "Адреса замовника",
+  act_number: "Номер акта",
+  act_date: "Дата",
   subtotal: "Разом без ПДВ",
   vat_amount: "ПДВ",
   total: "До сплати",
@@ -42,7 +53,9 @@ const ITEM_LEAF_LABELS: Record<string, string> = {
   amount: "Сума",
 };
 
-const ITEM_PATH_RE = /^items\[(\d+)]\.(\w+)$/;
+// Matches both invoice line items ("items[N].leaf") and act services
+// ("services[N].leaf") — the two use the same LineItem leaf names.
+const ITEM_PATH_RE = /^(?:items|services)\[(\d+)]\.(\w+)$/;
 
 export function fieldLabel(path: string): string {
   const known = LABELS[path];

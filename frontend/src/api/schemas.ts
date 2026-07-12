@@ -46,6 +46,35 @@ export const invoiceDataSchema = z.object({
 });
 export type InvoiceData = z.infer<typeof invoiceDataSchema>;
 
+// --- T10 Classifier + act type ------------------------------------------------
+// Mirrors backend/app/models/domain.py's ActData: same shape as InvoiceData,
+// with contractor/customer (виконавець/замовник) in place of supplier/buyer,
+// act_number/act_date in place of invoice_number/invoice_date, and services in
+// place of items (still lineItemSchema entries).
+
+export const actDataSchema = z.object({
+  contractor: partySchema,
+  customer: partySchema,
+  act_number: z.string().nullable(),
+  act_date: z.string().nullable(),
+  services: z.array(lineItemSchema),
+  subtotal: z.string().nullable(),
+  vat_amount: z.string().nullable(),
+  total: z.string().nullable(),
+});
+export type ActData = z.infer<typeof actDataSchema>;
+
+// A payload is either shape; the two are structurally distinct (items vs
+// services, supplier/buyer vs contractor/customer) so zod's union picks the
+// right one deterministically, mirroring the backend's `InvoiceData | ActData`
+// smart-union validation (app/models/domain.py's ExtractionResult.payload).
+export const extractionPayloadSchema = z.union([invoiceDataSchema, actDataSchema]);
+export type ExtractionPayload = z.infer<typeof extractionPayloadSchema>;
+
+export function isInvoicePayload(payload: ExtractionPayload): payload is InvoiceData {
+  return "items" in payload;
+}
+
 export const fieldConfidenceSchema = z.object({
   path: z.string(),
   confidence: z.number().min(0).max(1),
@@ -63,7 +92,7 @@ export type ValidationIssue = z.infer<typeof validationIssueSchema>;
 export const extractionDetailSchema = z.object({
   id: z.string(),
   document_id: z.string(),
-  payload: invoiceDataSchema,
+  payload: extractionPayloadSchema,
   field_confidences: z.array(fieldConfidenceSchema),
   validation_issues: z.array(validationIssueSchema),
 });
