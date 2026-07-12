@@ -174,8 +174,7 @@ def _check_date(view: _DocumentView, *, today: date) -> list[ValidationIssue]:
                 path=path,
                 code="future_date",
                 message=(
-                    f"{path} {own_date.isoformat()} is in the future "
-                    f"(today is {today.isoformat()})"
+                    f"{path} {own_date.isoformat()} is in the future (today is {today.isoformat()})"
                 ),
             )
         ]
