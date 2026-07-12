@@ -20,6 +20,7 @@ from fastapi.testclient import TestClient
 
 import app.services.ingestion as ingestion
 from app.main import app
+from app.models.domain import Classification, DocType
 from app.models.preprocess import PreprocessedDoc
 from app.routes.documents import get_documents_repo, get_extractions_repo, get_storage_repo
 from app.services.ingestion import BatchSizeError, IngestionService
@@ -40,6 +41,11 @@ def _stub_pipeline(monkeypatch: pytest.MonkeyPatch) -> None:
         ingestion,
         "preprocess",
         lambda content: PreprocessedDoc(mode="vision", images=[b"png"], pages=1),
+    )
+    monkeypatch.setattr(
+        ingestion,
+        "classify_document",
+        lambda doc: Classification(doc_type=DocType.invoice, confidence=0.99),
     )
     monkeypatch.setattr(ingestion, "extract_document", lambda **kwargs: None)
 

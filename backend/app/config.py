@@ -58,3 +58,10 @@ DEMO_USER_ID = UUID("00000000-0000-0000-0000-0000000000de")
 # app/services/rate_limit.py and docs/decisions.md).
 DEMO_RATE_LIMIT_MAX_REQUESTS = 30
 DEMO_RATE_LIMIT_WINDOW_SECONDS = 60.0
+
+# --- Classifier (T10) ---------------------------------------------------------
+# Below this confidence (or doc_type "other"), the pipeline skips extraction
+# entirely and routes the document straight to a "review" status with no
+# extraction row — the Review UI shows an "unrecognized document type" message
+# instead of a fields form (see app/services/ingestion.py).
+CLASSIFY_REVIEW_CONFIDENCE_THRESHOLD = 0.6

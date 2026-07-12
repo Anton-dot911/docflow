@@ -71,6 +71,14 @@ DEMO_DOCUMENTS: tuple[DemoDocSpec, ...] = (
         title="Рахунок з помилкою в сумі",
         description="Навмисна арифметична помилка — демонструє потік перевірки червоних полів.",
     ),
+    DemoDocSpec(
+        key="act_clean",
+        document_id=UUID("00000000-0000-0000-0000-0000000000d6"),
+        filename="akt_vykonanyh_robit.pdf",
+        difficulty="легкий",
+        title="Акт виконаних робіт",
+        description="Другий тип документа: класифікатор визначає акт і веде до окремої схеми.",
+    ),
 )
 
 DEMO_DOCUMENT_IDS: frozenset[UUID] = frozenset(spec.document_id for spec in DEMO_DOCUMENTS)

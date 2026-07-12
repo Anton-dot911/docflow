@@ -1,10 +1,20 @@
-"""Deterministic validation for extracted invoice data (T6).
+"""Deterministic validation for extracted invoice/act data (T6, generalized T10).
 
 Pure functions only: no I/O, no LLM calls, no DB access (CLAUDE.md rule 1/3 and
-the T6 task spec). Operates on the `InvoiceData` / `FieldConfidence` contracts
-from `app.models.domain` and produces `ValidationIssue`s that the caller
-(`services/extract.py`) persists and uses to zero out matching field
+the T6 task spec). Operates on the `InvoiceData`/`ActData` / `FieldConfidence`
+contracts from `app.models.domain` and produces `ValidationIssue`s that the
+caller (`services/extract.py`) persists and uses to zero out matching field
 confidences so the Review UI flags them.
+
+T10 adds `ActData` alongside `InvoiceData`. Rather than forking a parallel
+`validate_act.py`, the checks below are generalized over a small
+`_DocumentView` adapter that reads either payload's line items, its own-date
+field and its two parties under their type-specific names/paths
+(`items`/`invoice_date`/`supplier`+`buyer` vs `services`/`act_date`/
+`contractor`+`customer`) — `subtotal`/`vat_amount`/`total` are named
+identically on both models, so those checks need no adapting at all.
+`validate_invoice` is kept as a thin, name-preserving wrapper around the
+generalized `validate_document` so existing callers/tests are unaffected.
 
 A `None` field is never itself a validation error — it is already a
 low-confidence signal from extraction. Every check below only fires when all
@@ -17,13 +27,55 @@ Codes (fixed enum, verbatim from the task spec):
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 
 from app.config import MAX_INVOICE_AGE_YEARS, VALIDATION_AMOUNT_TOLERANCE
-from app.models.domain import FieldConfidence, InvoiceData, LineItem, Party, ValidationIssue
+from app.models.domain import (
+    ActData,
+    FieldConfidence,
+    InvoiceData,
+    LineItem,
+    Party,
+    ValidationIssue,
+)
 
 _CENTS = Decimal("0.01")
+
+
+@dataclass(frozen=True)
+class _DocumentView:
+    """Adapts an `InvoiceData`/`ActData` payload to the shape every check
+    below needs, translating each type's own field names into the checks'
+    generic terms and the dot-paths its type actually uses."""
+
+    payload: InvoiceData | ActData
+    items: list[LineItem]
+    items_path: str
+    own_date: date | None
+    date_path: str
+    parties: tuple[tuple[Party, str], ...]
+
+
+def _view(payload: InvoiceData | ActData) -> _DocumentView:
+    if isinstance(payload, InvoiceData):
+        return _DocumentView(
+            payload=payload,
+            items=payload.items,
+            items_path="items",
+            own_date=payload.invoice_date,
+            date_path="invoice_date",
+            parties=((payload.supplier, "supplier.tax_id"), (payload.buyer, "buyer.tax_id")),
+        )
+    return _DocumentView(
+        payload=payload,
+        items=payload.services,
+        items_path="services",
+        own_date=payload.act_date,
+        date_path="act_date",
+        parties=((payload.contractor, "contractor.tax_id"), (payload.customer, "customer.tax_id")),
+    )
 
 
 def _money(value: Decimal) -> str:
@@ -35,7 +87,7 @@ def _close(a: Decimal, b: Decimal) -> bool:
     return abs(a - b) <= VALIDATION_AMOUNT_TOLERANCE
 
 
-def _check_line_arithmetic(items: list[LineItem]) -> list[ValidationIssue]:
+def _check_line_arithmetic(items: list[LineItem], *, path_prefix: str) -> list[ValidationIssue]:
     """qty * unit_price == amount per line. Skips a line if any value is null."""
     issues: list[ValidationIssue] = []
     for i, item in enumerate(items):
@@ -45,7 +97,7 @@ def _check_line_arithmetic(items: list[LineItem]) -> list[ValidationIssue]:
         if not _close(expected, item.amount):
             issues.append(
                 ValidationIssue(
-                    path=f"items[{i}].amount",
+                    path=f"{path_prefix}[{i}].amount",
                     code="line_arithmetic_mismatch",
                     message=(
                         f"line {i + 1}: {item.quantity} * {item.unit_price} = "
@@ -56,13 +108,14 @@ def _check_line_arithmetic(items: list[LineItem]) -> list[ValidationIssue]:
     return issues
 
 
-def _check_subtotal(payload: InvoiceData) -> list[ValidationIssue]:
+def _check_subtotal(view: _DocumentView) -> list[ValidationIssue]:
     """sum(line amounts) == subtotal. Skipped unless subtotal and every line
     amount are present — an incomplete line means the sum is not meaningful,
     and that line's own null is already a low-confidence signal on its own."""
-    if payload.subtotal is None or not payload.items:
+    payload = view.payload
+    if payload.subtotal is None or not view.items:
         return []
-    amounts = [item.amount for item in payload.items]
+    amounts = [item.amount for item in view.items]
     if any(amount is None for amount in amounts):
         return []
     total = sum((amount for amount in amounts if amount is not None), Decimal("0"))
@@ -77,8 +130,11 @@ def _check_subtotal(payload: InvoiceData) -> list[ValidationIssue]:
     ]
 
 
-def _check_total(payload: InvoiceData) -> list[ValidationIssue]:
-    """subtotal + vat_amount == total. Skipped unless all three are present."""
+def _check_total(payload: InvoiceData | ActData) -> list[ValidationIssue]:
+    """subtotal + vat_amount == total. Skipped unless all three are present.
+
+    `subtotal`/`vat_amount`/`total` are named identically on `InvoiceData` and
+    `ActData`, so this check needs no `_DocumentView` indirection."""
     if payload.subtotal is None or payload.vat_amount is None or payload.total is None:
         return []
     expected = payload.subtotal + payload.vat_amount
@@ -96,41 +152,41 @@ def _check_total(payload: InvoiceData) -> list[ValidationIssue]:
     ]
 
 
-def _check_date(payload: InvoiceData, *, today: date) -> list[ValidationIssue]:
-    """invoice_date is a real date, not in the future (today allowed), not
-    older than MAX_INVOICE_AGE_YEARS. `bad_date` is defensive: Pydantic already
-    guarantees a real `date` for any validated InvoiceData, so it only fires if
-    a caller bypassed validation (e.g. `model_construct`)."""
-    invoice_date = payload.invoice_date
-    if invoice_date is None:
+def _check_date(view: _DocumentView, *, today: date) -> list[ValidationIssue]:
+    """The document's own date is a real date, not in the future (today
+    allowed), not older than MAX_INVOICE_AGE_YEARS. `bad_date` is defensive:
+    Pydantic already guarantees a real `date` for any validated payload, so it
+    only fires if a caller bypassed validation (e.g. `model_construct`)."""
+    own_date, path = view.own_date, view.date_path
+    if own_date is None:
         return []
-    if not isinstance(invoice_date, date):
+    if not isinstance(own_date, date):
         return [
             ValidationIssue(
-                path="invoice_date",
+                path=path,
                 code="bad_date",
-                message=f"invoice_date is not a valid date: {invoice_date!r}",
+                message=f"{path} is not a valid date: {own_date!r}",
             )
         ]
-    if invoice_date > today:
+    if own_date > today:
         return [
             ValidationIssue(
-                path="invoice_date",
+                path=path,
                 code="future_date",
                 message=(
-                    f"invoice_date {invoice_date.isoformat()} is in the future "
+                    f"{path} {own_date.isoformat()} is in the future "
                     f"(today is {today.isoformat()})"
                 ),
             )
         ]
     cutoff = today.replace(year=today.year - MAX_INVOICE_AGE_YEARS)
-    if invoice_date < cutoff:
+    if own_date < cutoff:
         return [
             ValidationIssue(
-                path="invoice_date",
+                path=path,
                 code="stale_date",
                 message=(
-                    f"invoice_date {invoice_date.isoformat()} is more than "
+                    f"{path} {own_date.isoformat()} is more than "
                     f"{MAX_INVOICE_AGE_YEARS} years old (cutoff {cutoff.isoformat()})"
                 ),
             )
@@ -180,21 +236,32 @@ def _check_tax_id(party: Party, *, path: str) -> list[ValidationIssue]:
     return [issue]
 
 
-def validate_invoice(payload: InvoiceData, *, today: date | None = None) -> list[ValidationIssue]:
+def validate_document(
+    payload: InvoiceData | ActData, *, today: date | None = None
+) -> list[ValidationIssue]:
     """Run every deterministic check and return the combined issue list.
 
-    `today` is injectable for tests; real callers leave it as `None` and get
+    Works for either `InvoiceData` or `ActData` — see `_DocumentView`/`_view`
+    above for how the two payload shapes are read generically. `today` is
+    injectable for tests; real callers leave it as `None` and get
     `date.today()`.
     """
     resolved_today = today if today is not None else date.today()
+    view = _view(payload)
     issues: list[ValidationIssue] = []
-    issues += _check_line_arithmetic(payload.items)
-    issues += _check_subtotal(payload)
+    issues += _check_line_arithmetic(view.items, path_prefix=view.items_path)
+    issues += _check_subtotal(view)
     issues += _check_total(payload)
-    issues += _check_date(payload, today=resolved_today)
-    issues += _check_tax_id(payload.supplier, path="supplier.tax_id")
-    issues += _check_tax_id(payload.buyer, path="buyer.tax_id")
+    issues += _check_date(view, today=resolved_today)
+    for party, path in view.parties:
+        issues += _check_tax_id(party, path=path)
     return issues
+
+
+def validate_invoice(payload: InvoiceData, *, today: date | None = None) -> list[ValidationIssue]:
+    """`validate_document`, kept under its original T6 name for existing
+    callers/tests — `InvoiceData` was the only payload type before T10."""
+    return validate_document(payload, today=today)
 
 
 def zero_out_confidences(

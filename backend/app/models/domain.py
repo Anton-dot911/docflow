@@ -7,6 +7,16 @@ the single source of truth for the pipeline's structured data. T5 uses
 in one place, and are exercised by their own tasks (T10 classifier, T6
 validation). Money/quantity are `Decimal` and dates are `date` per CLAUDE.md
 rule 7; JSON serialization renders them as numeric strings / ISO 8601.
+
+T10 adds `ActData` (акт виконаних робіт), mirroring `InvoiceData` field-for-
+field: `contractor`/`customer` in place of `supplier`/`buyer` (виконавець /
+замовник, the natural Ukrainian terms for who performs vs. who receives the
+work), `act_number`/`act_date` in place of `invoice_number`/`invoice_date`,
+`services` in place of `items` (still a list of the same `LineItem` shape).
+`ExtractionResult.payload` becomes the `InvoiceData | ActData` union the
+docstring below anticipated; Pydantic's smart-union validation picks the right
+one from the required field sets (`items` vs `services`, `supplier`/`buyer` vs
+`contractor`/`customer`), so no extra discriminator field is needed.
 """
 
 from __future__ import annotations
@@ -53,6 +63,19 @@ class InvoiceData(BaseModel):
     total: Decimal | None
 
 
+class ActData(BaseModel):
+    """Акт виконаних робіт (act of completed works/services) — T10."""
+
+    contractor: Party  # виконавець — mirrors InvoiceData.supplier
+    customer: Party  # замовник — mirrors InvoiceData.buyer
+    act_number: str | None
+    act_date: date | None
+    services: list[LineItem]
+    subtotal: Decimal | None
+    vat_amount: Decimal | None
+    total: Decimal | None
+
+
 class FieldConfidence(BaseModel):
     path: str  # dot-path, e.g. "items[2].amount"
     confidence: float = Field(ge=0, le=1)
@@ -61,7 +84,7 @@ class FieldConfidence(BaseModel):
 
 class ExtractionResult(BaseModel):
     doc_type: DocType
-    payload: InvoiceData  # union with ActData when added (T10)
+    payload: InvoiceData | ActData
     confidences: list[FieldConfidence]
 
 

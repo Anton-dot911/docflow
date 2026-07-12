@@ -1,10 +1,15 @@
-"""Exhaustive unit tests for services/validate.py (T6).
+"""Exhaustive unit tests for services/validate.py (T6, generalized in T10).
 
 Pure logic, no mocks needed (CLAUDE.md testing conventions). Covers arithmetic
 tolerance edges, date sanity, ЄДРПОУ/ІПН checksum vectors, confidence zeroing,
 and an "e2e-lite" run of the full pipeline (all checks together) against the
 T5 clean fixture's expected values — see docs comment on
 `test_clean_t5_fixture_produces_zero_issues` for why that must stay at zero.
+This whole invoice suite is unchanged from T6: it still calls `validate_invoice`
+exactly as before, which now forwards to the generalized `validate_document`
+(see `services/validate.py`). A parallel suite near the bottom of this file
+exercises `validate_document` directly against `ActData`, proving the same
+checks generalize correctly rather than being forked into a second module.
 """
 
 from __future__ import annotations
@@ -17,8 +22,15 @@ from typing import Any
 
 import pytest
 
-from app.models.domain import FieldConfidence, InvoiceData, LineItem, Party, ValidationIssue
-from app.services.validate import validate_invoice, zero_out_confidences
+from app.models.domain import (
+    ActData,
+    FieldConfidence,
+    InvoiceData,
+    LineItem,
+    Party,
+    ValidationIssue,
+)
+from app.services.validate import validate_document, validate_invoice, zero_out_confidences
 
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
 
@@ -413,3 +425,149 @@ def test_clean_t5_fixture_produces_zero_issues() -> None:
     issues = validate_invoice(payload)
 
     assert issues == [], f"clean fixture produced issues: {issues}"
+
+
+# --- T10: validate_document generalized over ActData --------------------------
+# Mirrors a slice of the invoice suite above against ActData's own field names
+# (services/act_date/contractor/customer instead of items/invoice_date/
+# supplier/buyer), proving the checks generalize rather than being forked.
+
+
+def _act(
+    *,
+    services: list[LineItem] | None = None,
+    subtotal: str | None = "100.00",
+    vat_amount: str | None = "20.00",
+    total: str | None = "120.00",
+    act_date: date | None = None,
+    contractor_tax_id: str | None = None,
+    customer_tax_id: str | None = None,
+) -> ActData:
+    return ActData(
+        contractor=_party(contractor_tax_id, name="contractor"),
+        customer=_party(customer_tax_id, name="customer"),
+        act_number="ACT-1",
+        act_date=act_date,
+        services=services
+        if services is not None
+        else [_item(quantity="1", unit_price="100.00", amount="100.00")],
+        subtotal=Decimal(subtotal) if subtotal is not None else None,
+        vat_amount=Decimal(vat_amount) if vat_amount is not None else None,
+        total=Decimal(total) if total is not None else None,
+    )
+
+
+def test_act_line_arithmetic_uses_services_path() -> None:
+    act = _act(services=[_item(quantity="3", unit_price="10.00", amount="30.011")])
+    issues = validate_document(act, today=date(2025, 1, 1))
+    matches = [i for i in issues if i.code == "line_arithmetic_mismatch"]
+    assert len(matches) == 1
+    assert matches[0].path == "services[0].amount"
+
+
+def test_act_line_arithmetic_exact_match_no_issue() -> None:
+    act = _act(services=[_item(quantity="3", unit_price="10.00", amount="30.00")])
+    issues = validate_document(act, today=date(2025, 1, 1))
+    assert [i for i in issues if i.code == "line_arithmetic_mismatch"] == []
+
+
+def test_act_subtotal_mismatch_flags() -> None:
+    act = _act(
+        services=[_item(quantity="1", unit_price="80.00", amount="80.00")],
+        subtotal="100.00",
+    )
+    issues = validate_document(act, today=date(2025, 1, 1))
+    matches = [i for i in issues if i.code == "subtotal_mismatch"]
+    assert len(matches) == 1
+    assert matches[0].path == "subtotal"
+
+
+def test_act_total_mismatch_flags() -> None:
+    act = _act(subtotal="100.00", vat_amount="20.00", total="130.00")
+    issues = validate_document(act, today=date(2025, 1, 1))
+    matches = [i for i in issues if i.code == "total_mismatch"]
+    assert len(matches) == 1
+    assert matches[0].path == "total"
+
+
+def test_act_date_uses_act_date_path() -> None:
+    act = _act(act_date=date(2025, 1, 2))
+    issues = validate_document(act, today=date(2025, 1, 1))
+    matches = [i for i in issues if i.code == "future_date"]
+    assert len(matches) == 1
+    assert matches[0].path == "act_date"
+
+
+def test_act_date_stale_flags() -> None:
+    act = _act(act_date=date(2014, 1, 1))
+    issues = validate_document(act, today=date(2025, 1, 1))
+    matches = [i for i in issues if i.code == "stale_date"]
+    assert len(matches) == 1
+    assert matches[0].path == "act_date"
+
+
+def test_act_date_null_skipped() -> None:
+    act = _act(act_date=None)
+    issues = validate_document(act, today=date(2025, 1, 1))
+    assert [i for i in issues if "date" in i.code] == []
+
+
+@pytest.mark.parametrize("tax_id", EDRPOU_VALID)
+def test_act_contractor_edrpou_valid_no_issue(tax_id: str) -> None:
+    act = _act(contractor_tax_id=tax_id)
+    issues = validate_document(act, today=date(2025, 1, 1))
+    assert [i for i in issues if i.code == "bad_tax_id"] == []
+
+
+def test_act_contractor_edrpou_broken_flags_contractor_path() -> None:
+    act = _act(contractor_tax_id="29141770")  # corrupted control digit
+    issues = validate_document(act, today=date(2025, 1, 1))
+    matches = [i for i in issues if i.code == "bad_tax_id"]
+    assert len(matches) == 1
+    assert matches[0].path == "contractor.tax_id"
+
+
+def test_act_customer_ipn_broken_flags_customer_path() -> None:
+    act = _act(customer_tax_id="3012415670")  # corrupted control digit
+    issues = validate_document(act, today=date(2025, 1, 1))
+    matches = [i for i in issues if i.code == "bad_tax_id"]
+    assert len(matches) == 1
+    assert matches[0].path == "customer.tax_id"
+
+
+def _load_expected_act_text() -> dict[str, Any]:
+    if FIXTURES not in sys.path:
+        sys.path.insert(0, FIXTURES)
+    from generate_act_fixtures import EXPECTED_ACT_TEXT
+
+    return dict(EXPECTED_ACT_TEXT)
+
+
+def test_clean_act_fixture_produces_zero_issues() -> None:
+    """Runs every check together against the T10 "clean" act fixture's
+    known-correct field values (the same dict that generates act_text.pdf).
+    Must produce zero issues, mirroring `test_clean_t5_fixture_produces_zero_issues`
+    above for the invoice case."""
+    exp = _load_expected_act_text()
+    payload = ActData(
+        contractor=Party(**exp["contractor"]),
+        customer=Party(**exp["customer"]),
+        act_number=exp["act_number"],
+        act_date=date.fromisoformat(exp["act_date"]),
+        services=[
+            LineItem(
+                name=item["name"],
+                quantity=Decimal(item["quantity"]),
+                unit_price=Decimal(item["unit_price"]),
+                amount=Decimal(item["amount"]),
+            )
+            for item in exp["services"]
+        ],
+        subtotal=Decimal(exp["subtotal"]),
+        vat_amount=Decimal(exp["vat_amount"]),
+        total=Decimal(exp["total"]),
+    )
+
+    issues = validate_document(payload)
+
+    assert issues == [], f"clean act fixture produced issues: {issues}"

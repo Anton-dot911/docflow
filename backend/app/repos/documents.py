@@ -47,14 +47,22 @@ class DocumentsRepo:
         """Transition a document to a new status."""
         self._client.table(_TABLE).update({"status": status}).eq("id", str(document_id)).execute()
 
-    def mark_reviewable(self, *, document_id: UUID, mode: str, pages: int) -> None:
+    def mark_reviewable(
+        self, *, document_id: UUID, mode: str, pages: int, doc_type: str | None = None
+    ) -> None:
         """Persist preprocessing outputs and advance the document to `review`.
 
-        Writes `mode`/`pages` and `status='review'` in one update (T3).
+        Writes `mode`/`pages` and `status='review'` in one update (T3). T10
+        additionally writes `doc_type` (the classifier's decision) when given;
+        it stays optional so pre-T10 callers are unaffected. A `review` row
+        with `doc_type` set but no `extractions` row is how the Review UI
+        recognizes an "unrecognized document type" (or low-confidence) result
+        that skipped extraction entirely — see `services/ingestion.py`.
         """
-        self._client.table(_TABLE).update({"mode": mode, "pages": pages, "status": "review"}).eq(
-            "id", str(document_id)
-        ).execute()
+        update: dict[str, Any] = {"mode": mode, "pages": pages, "status": "review"}
+        if doc_type is not None:
+            update["doc_type"] = doc_type
+        self._client.table(_TABLE).update(update).eq("id", str(document_id)).execute()
 
     def mark_failed(self, *, document_id: UUID, error: str) -> None:
         """Record a processing failure: `status='failed'` with an error message."""

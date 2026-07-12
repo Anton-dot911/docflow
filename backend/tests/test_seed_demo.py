@@ -1,12 +1,13 @@
 """Unit tests for scripts/seed_demo.py's idempotency and reset orchestration.
 
 The real pipeline (Anthropic + Supabase Storage) is stubbed out — these tests
-exercise only `seed()`'s decisions: does a fresh run seed all 5 documents
-exactly once, does re-running with rows already present skip every one of
-them (no duplicates, no repeat LLM/Storage calls — the DoD's "run twice ->
-same 5 documents" requirement), and does `--reset` restore a committed
-snapshot without touching Storage or the LLM at all. Never calls the real
-Anthropic API or Supabase (CLAUDE.md testing conventions).
+exercise only `seed()`'s decisions: does a fresh run seed every curated
+document (5 invoices + 1 act, T10) exactly once, does re-running with rows
+already present skip every one of them (no duplicates, no repeat LLM/Storage
+calls — the DoD's "run twice -> same documents" requirement), and does
+`--reset` restore a committed snapshot without touching Storage or the LLM at
+all. Never calls the real Anthropic API or Supabase (CLAUDE.md testing
+conventions).
 """
 
 from __future__ import annotations
@@ -37,8 +38,8 @@ class _FakeExtractionService:
     def __init__(self, llm: Any = None, extractions: Any = None) -> None:
         del llm, extractions
 
-    def extract(self, *, document_id: Any, doc: Any) -> None:
-        del document_id, doc
+    def extract(self, *, document_id: Any, doc: Any, doc_type: Any = None) -> None:
+        del document_id, doc, doc_type
         return None
 
 
