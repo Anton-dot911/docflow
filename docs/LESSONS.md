@@ -54,8 +54,8 @@ rule wins. This file is shared across all antlab repos.
 
 9. **Shared Supabase project (meter-dev):** multiple products share it.
    Never touch tables outside your repo's own schema/contract
-   (llm_calls and budgets belong to Meter; documents/extractions to
-   DocFlow; datasets/examples to Goldsmith).
+   (llm_calls and budgets belong to Meter; documents/extractions/review_log
+   to DocFlow; datasets/examples to Goldsmith).
 
 ## Background behavior
 
@@ -74,8 +74,7 @@ rule wins. This file is shared across all antlab repos.
     a record — degrade values to null, keep the record.
 
 13. **Validation fires on present values only; null is a signal, not an
-    error.** Extraction returns null for unreadable fields — never
-    fabricated values.
+    error.**
 
 ## Environment quirks (Claude Code on the web)
 
@@ -85,16 +84,27 @@ rule wins. This file is shared across all antlab repos.
 16. Free-tier Supabase pauses after inactivity; a keepalive workflow
     exists — if REST suddenly 502s, suspect pause first, egress second.
 17. Browser auto-dark-mode inverts light UIs: manage color-scheme
-    explicitly; scanned-document panes always render as light paper.
+    explicitly.
 
 ## Cost awareness
 
-18. Every LLM call goes through the metered client with a meaningful
-    component name; cheap tasks (classification, drafting) default to the
-    small model via env var, never hardcoded.
+18. Give every metered LLM call a meaningful component name; cheap tasks
+    (classification, drafting) default to the small model via env var,
+    never hardcoded.
 
-    19. **CLAUDE.md is split into # INVARIANTS (rules and contracts —
-    change only by decision) and # Current state (structure,
-    endpoints, auth shape — point-in-time facts).** Every task's DoD
-    includes updating Current state to match merged reality.
+## Documentation architecture
+
+19. **CLAUDE.md is split into # INVARIANTS (rules and contracts — change
+    only by decision) and # Current state (structure, endpoints, auth/RLS
+    shape, UI notes — point-in-time facts).** Current state is the single
+    home for point-in-time truth; every task's DoD includes updating it to
+    match merged reality.
+
+## Repo & change hygiene
+
+20. **New dependencies require justification.** Never add a dependency
+    without a comment in the PR/commit body explaining why.
+
+21. **Do not create documentation files unless asked.** Update existing
+    ones.
 

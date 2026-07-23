@@ -1,6 +1,6 @@
 # PLAN.md — DocFlow Implementation Plan
 
-Each task = one coding-agent session (2–4h scope). Give the agent ONE task, with its DoD. Do not proceed while the previous task's DoD is red.
+One task per session, one PR into main — see LESSONS §1–2. Give the agent ONE task, with its DoD. Do not proceed while the previous task's DoD is red.
 
 ---
 
@@ -51,7 +51,7 @@ class FieldConfidence(BaseModel):
 
 class ExtractionResult(BaseModel):
     doc_type: DocType
-    payload: InvoiceData         # union with ActData when added (T10)
+    payload: InvoiceData | ActData
     confidences: list[FieldConfidence]
 
 class ValidationIssue(BaseModel):
@@ -61,6 +61,8 @@ class ValidationIssue(BaseModel):
 ```
 
 ### DDL (supabase/migrations/001_init.sql)
+
+Migrations are applied by the human (LESSONS §7); the block below shows the target schema, not an auto-applied step.
 
 ```sql
 create type doc_status as enum ('queued','processing','review','confirmed','failed');
@@ -118,7 +120,7 @@ Confidence threshold for review highlight: `settings.REVIEW_THRESHOLD = 0.85`.
 ## Tasks
 
 **T1. Scaffold & skeleton.**
-Run `antlab-create` (py-service + frontend), wire Supabase project, apply migration 001, health endpoint, CI green.
+Run `antlab-create` (py-service + frontend), wire Supabase project, produce migration 001 SQL and hand it to the human to apply (LESSONS §7), verify via REST, health endpoint, CI green.
 DoD: `pytest`, `ruff`, `mypy`, `pnpm test` all pass in CI; `/health` returns commit SHA.
 
 **T2. Ingestion.**
@@ -156,19 +158,20 @@ DoD: fresh deploy + seed = working demo in ≤ 2 commands. — met: `scripts/see
 implementation once it merged; see `docs/decisions.md` for the T8-precondition
 gap this originally ran into and the guardrail decisions made.
 
-**T10. Classifier + Act type.**
+**T10. Classifier + Act type.** ✅ Done (PR #10)
 `prompts/classify.v1.md`, `Classification` call on page 1; `ActData` model + `extract_act.v1.md`; router by doc_type.
-DoD: llm smoke tests for both types; unknown docs → `other` + status review.
+DoD: llm smoke tests for both types; unknown docs → `other` + status review. — met.
 
 **T11. Evals.**
 `make eval`: loads Goldsmith JSONL from `data/golden/`, runs pipeline, computes field accuracy (exact for numbers/dates, fuzzy≥0.9 for names), schema validity rate, review-flag rate, false-confidence rate; prints table by tag; writes `eval_runs/<ts>.json`; compares to previous run, exit 1 on regression > 2pp.
 DoD: runs on 40-doc dataset; metrics table generated.
 
 **T12. Hardening & release.**
-Prompt iteration to targets (accuracy ≥95%, validity ≥99%); auth + real user isolation (RLS active, no service-role in request path); README(EN) with metrics + architecture diagram + design decisions; deploy backend (Railway/Fly) + frontend (Netlify); demo video.
+Prompt iteration to targets (accuracy ≥95%, validity ≥99%); README(EN) with metrics + architecture diagram + design decisions; deploy backend (Railway/Fly) + frontend (Netlify); demo video.
+- Auth + real user isolation: no service-role key in the request path, RLS active, documents scoped to authenticated users — required before any client deployment.
 DoD: ТЗ §10 checklist fully green.
 
 ---
 
 ## Session prompt template
-> Read CLAUDE.md and docs/PLAN.md. Implement task T<N> only. Follow the contracts verbatim. Stop and ask if a contract seems wrong rather than changing it silently. Finish with: tests passing, short summary of decisions made.
+> Read CLAUDE.md and docs/PLAN.md. Implement task T<N> only. Follow the contracts verbatim. Stop and ask if a contract seems wrong rather than changing it silently. Finish with: tests passing, CLAUDE.md # Current state updated to match merged reality, short summary of decisions made.
