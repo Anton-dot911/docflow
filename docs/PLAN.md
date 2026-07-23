@@ -165,7 +165,7 @@ DoD: llm smoke tests for both types; unknown docs → `other` + status review.
 DoD: runs on 40-doc dataset; metrics table generated.
 
 **T12. Hardening & release.**
-Prompt iteration to targets (accuracy ≥95%, validity ≥99%); README(EN) with metrics + architecture diagram + design decisions; deploy backend (Railway/Fly) + frontend (Netlify); demo video.
+Prompt iteration to targets (accuracy ≥95%, validity ≥99%); auth + real user isolation (RLS active, no service-role in request path); README(EN) with metrics + architecture diagram + design decisions; deploy backend (Railway/Fly) + frontend (Netlify); demo video.
 DoD: ТЗ §10 checklist fully green.
 
 ---
