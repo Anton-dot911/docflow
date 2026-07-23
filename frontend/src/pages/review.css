@@ -1,5 +1,5 @@
 /*
- * Review UI (T7) — tokens and layout, distilled from docs/UI_SPEC.md.md §1-2
+ * Review UI (T7) — tokens and layout, distilled from docs/UI_SPEC.md §1-2
  * (source of visual truth: docs/mockups/review.html, NOT copy-pasted). Every
  * custom property below is named after the spec's token table so the two can
  * be diffed by eye. Class names are BEM-ish under an `rv-` prefix to keep this

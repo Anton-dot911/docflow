@@ -84,4 +84,4 @@ Auth is not implemented. All rows are written under `PLACEHOLDER_USER_ID`; repos
 T1–T10 merged (PR #10 latest). T11 (evals) and T12 (hardening: auth/RLS, deploy, README) not yet started.
 
 ## UI notes
-- Scanned-document panes always render as light paper, even in dark theme; `color-scheme` is managed explicitly (never left to browser auto-darkening). See `docs/UI_SPEC.md.md`.
+- Scanned-document panes always render as light paper, even in dark theme; `color-scheme` is managed explicitly (never left to browser auto-darkening). See `docs/UI_SPEC.md`.
