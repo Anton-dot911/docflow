@@ -7,3 +7,8 @@ __pycache__/
 .coverage
 dist/
 .env
+
+# T11 golden dataset (Goldsmith-owned data — LESSONS §9; re-fetch via `make eval`).
+# The eval *script* and eval_runs/*.json results are committed; the raw fixtures
+# and downloaded files are not (see docs/decisions.md).
+data/golden/
