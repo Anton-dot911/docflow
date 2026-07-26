@@ -33,6 +33,7 @@ dev = [
     "ruff>=0.8",
     "mypy>=1.13",
     "fpdf2>=2.8.7",
+    "rapidfuzz>=3.14.5",
 ]
 
 [build-system]
@@ -65,7 +66,7 @@ ignore = ["RUF001", "RUF002", "RUF003"]
 
 [tool.mypy]
 strict = true
-files = ["app", "tests"]
+files = ["app", "tests", "scripts/docflow_eval"]
 mypy_path = ["scripts"]
 plugins = ["pydantic.mypy"]
 
