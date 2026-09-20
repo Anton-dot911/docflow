@@ -175,3 +175,33 @@ DoD: ТЗ §10 checklist fully green.
 
 ## Session prompt template
 > Read CLAUDE.md and docs/PLAN.md. Implement task T<N> only. Follow the contracts verbatim. Stop and ask if a contract seems wrong rather than changing it silently. Finish with: tests passing, CLAUDE.md # Current state updated to match merged reality, short summary of decisions made.
+>
+> ## Task Contract: DocFlow Cost Instrumentation (T12 — Step 1)
+
+**Goal:** Measure where DocFlow's inference cost actually comes from before optimizing anything.
+
+**Context:** T11 closed with strong field accuracy (quality target met, do not regress). Cost is above target — this task instruments the cost, it does not reduce it.
+
+**In scope:**
+- Instrument per-document logging: LLM calls count, model used per call, input/output tokens, cost in $ per call
+- Tag each call by purpose (primary parsing / retry / validation / other)
+- Run against 20–30 documents from the T11 eval set
+- Output: CSV or table with per-document breakdown + aggregate summary (avg cost/doc, % cost by call type, % cost by model)
+
+**Explicitly out of scope:**
+- No changes to model selection
+- No changes to prompts or parsing logic
+- No changes to retry logic behavior (only observe/log it)
+- No new verticals, no Vertical Pack work
+- **Quality/accuracy logic must not be touched or altered in any way — this is a read-only measurement pass**
+
+**Definition of Done (evidence-based):**
+- [ ] Script runs and produces raw output (not just claims) showing per-document cost breakdown
+- [ ] Aggregate summary table generated (avg cost/doc, cost % by category)
+- [ ] Eval accuracy on the same 20–30 docs re-verified unchanged (proof quality wasn't touched)
+- [ ] One PR into main containing the instrumentation code + the summary output
+
+**Anton's role:** Review the summary table, decide next optimization target (model / retries / prompt size) — a ~10 min decision, not hours of analysis.
+
+**Next step (not this task):** Based on this data, write Task Contract #2 targeting the actual cost driver identified.
+
