@@ -536,3 +536,107 @@ how `tests/fixtures/generate_fixtures.py` imports `tests/_pdfgen.py`).
 ["scripts"]` adds it as a search path (not as a file to type-check on its
 own), and `scripts/seed_demo.py` happens to already pass strict mode as a
 result of being resolved.
+
+## Evals (T11)
+
+### Sample size: the dataset has **11** examples, not 40 (honest baseline)
+The ТЗ §8 target is ≥40 golden documents and the T11 brief anticipated ~23; the
+Goldsmith export `docflow-invoices@1` actually returns **11**. The eval runs on
+exactly what is exported — no padding, no skipping — and states `N=11` in the
+table, the JSON (`n_examples`), and every summary. This is a **baseline** run;
+closing the gap to 40 (and re-running toward the ТЗ accuracy/validity targets)
+is called out for T12. Nothing here is the final release number.
+
+### The golden files are `storage://` refs resolved from Supabase Storage
+Each example's `input.file_ref` is a `storage://goldsmith-inputs/<ulid>.pdf`
+pointer, not inline content. `docflow_eval.golden.resolve_file` downloads the
+object from the shared Supabase Storage bucket `goldsmith-inputs` with the
+service-role key and caches it under `data/golden/files/`. Goldsmith owns that
+bucket (LESSONS §9); DocFlow only **reads** it, and only in the eval harness.
+
+### Raw dataset is git-ignored; the script and results are committed
+Per the T11 brief's "use your judgment": `data/golden/` (the fetched JSONL and
+the downloaded PDFs) is **git-ignored** — it is Goldsmith-owned data, re-fetched
+deterministically by `make eval` (`--fetch`) for anyone with the export token.
+What **is** committed: the eval harness (`scripts/docflow_eval/`, `Makefile`)
+and the run results (`eval_runs/<timestamp>.json`). This keeps another product's
+fixtures out of DocFlow's repo while keeping the run fully reproducible and its
+numbers auditable.
+
+### The pipeline runs in-process with DB persistence stubbed, not over HTTP
+The eval exercises the **real** pipeline stages — T3 preprocess → T10 classify →
+T5/T10 extract → T6 validate — via the same production services and the real
+Anthropic API (`docflow_eval.pipeline.run_pipeline` mirrors
+`ingestion._run_pipeline`, including the "other/low-confidence → skip
+extraction" routing). The one thing stubbed is persistence: a capturing fake
+`ExtractionsRepo` is injected so the eval never writes rows to the shared
+Supabase `documents`/`extractions` tables (same DB-override technique the T7/T8
+acceptance runs used). Nothing that determines extraction quality is mocked; the
+Storage upload and the status-row writes are simply not part of "did the model
+extract the right values". Keep `run_pipeline` in sync with `_run_pipeline` if
+the ingestion routing changes.
+
+### Label→contract field mapping; `currency` is not scorable
+Goldsmith labels carry a minimal subset — `invoice_number`, `issue_date`,
+`total_amount`, sometimes `currency` — not the full `InvoiceData` shape. The
+scorer maps them onto the payload for either doc type: `invoice_number` ⇄
+`invoice_number`/`act_number`, `issue_date` ⇄ `invoice_date`/`act_date`,
+`total_amount` ⇄ `total`. `currency` has **no field** in the
+`InvoiceData`/`ActData` contract, so it is recorded per-doc but marked
+`comparable=false` and excluded from accuracy — counting it as a miss would
+punish the pipeline for a field the contract never promised. (If currency
+matters, it is a contract change for a future task, not something to bolt onto
+the eval.)
+
+### "Empty sentinel" labels: `total_amount: 0` / `invoice_number: "0"` mean absent
+A blank invoice **form** (`without data`) and a non-invoice **letter**
+(`other letter`) are labelled with `total_amount: 0` and `invoice_number: "0"`
+— Goldsmith's "no value is present" sentinels. The **correct** pipeline
+behaviour for these is to return `null` (CLAUDE.md rule 5: never fabricate), so
+the scorer treats a sentinel as matched by a pipeline `None` and treats a
+fabricated concrete value as the wrong — and, if confident, dangerous — answer.
+This is what makes the false-confidence metric meaningful rather than inverted.
+
+### Tag normalisation is an explicit, visible map
+Raw tags are inconsistent (`Clean pdf`, `clean`, `scangood`, `scan bad`,
+`foto`, `nonstandard`, `without data`, `other letter`). `scoring._TAG_NORMALIZATION`
+folds them onto the canonical ТЗ §8 categories (`clean`, `scan`, `photo`,
+`multipage`, `nonstandard_layout`, plus `without_data`/`other`/`untagged`) so
+the by-category table is meaningful; unknown tags fall through to a
+snake-cased form. The **raw** tags are kept verbatim in the per-example JSON, so
+the normalisation hides nothing. The ТЗ's `broken`/`construction`/`medical`
+categories simply do not appear in this export.
+
+### New dependency: `rapidfuzz` (dev group)
+`rapidfuzz` provides the fuzzy string ratio the contract requires for
+name/string fields (≥0.9). It is a quality/eval-time tool, not part of the
+serving path, so it lives in the `dev` dependency group alongside `fpdf2`
+(fixture generation) — `make eval` is a developer/CI-quality command, not a
+request-path one.
+
+### Baseline findings (run `eval_runs/20260726T160746Z.json`, model `claude-sonnet-4-6`)
+**N=11. Field accuracy 93.8% (30/32 comparable fields), schema validity 100%,
+review-flag rate 12.2%, and — the metric that matters most — false-confidence
+rate 0.0% (0 fields).** No field was confidently wrong.
+
+The only two field misses are both the **safe** kind — the model abstained
+(returned `null`) with low confidence rather than fabricating:
+- `without_data` (blank invoice form): `issue_date` expected `2026-07-25`, got
+  `null` at confidence 0.05. The form has no date filled in, so `null` is the
+  correct extraction; the label's date looks like an export/labelling artifact.
+  Excluding it, accuracy is 30/31 = 96.8%.
+- `nonstandard_layout`: `total_amount` expected `4868.85`, got `null` at
+  confidence 0.10 — genuine under-extraction on an unusual layout, but correctly
+  flagged for review (low confidence), not fabricated.
+
+Both misses are exactly the behaviour CLAUDE.md rule 5 wants: a missing value
+becomes a low-confidence `null` (→ review flag), never a confident wrong number.
+Other things the run confirmed end-to-end: the `other letter` was classified
+`other` and correctly skipped extraction; the `foto` document was classified
+`act` and scored through the act field mapping; one correct `total` (`multipage`)
+was zeroed to confidence 0 by a T6 arithmetic issue — right value, still flagged,
+still not false-confidence. Total metered extraction cost for the run: $0.38.
+
+Regression gate: this is the first run, so the comparison prints "baseline, no
+prior run to compare" and exits 0; the >2pp-regression check (docs/PLAN.md)
+activates once a second run exists.

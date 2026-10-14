@@ -58,7 +58,11 @@ backend/
     models/          # Pydantic domain models (contracts — see docs/PLAN.md ## Contracts)
   prompts/
   tests/
-  data/golden/       # eval dataset (JSONL from Goldsmith)
+  scripts/
+    docflow_eval/    # T11 eval harness (make eval): reader, scoring, pipeline, run
+  data/golden/       # eval dataset (JSONL + files from Goldsmith; git-ignored)
+  eval_runs/         # committed eval results (<timestamp>.json)
+  Makefile           # `make eval`
 frontend/
   src/
     pages/           # Review, History, Demo
@@ -81,7 +85,10 @@ GET   /api/demo/samples            5 preloaded demo docs (no auth)
 Auth is not implemented. All rows are written under `PLACEHOLDER_USER_ID`; repos use the service-role Supabase key, so RLS is dormant (bypassed, not enforced). Real user isolation is T12 and is required before any client deployment.
 
 ## Merged-task status
-T1–T10 merged (PR #10 latest). T11 (evals) and T12 (hardening: auth/RLS, deploy, README) not yet started.
+T1–T10 merged (PR #10 latest). T11 (evals) implemented (`make eval`) — see below. T12 (hardening: auth/RLS, deploy, README) not yet started.
+
+## Evals (T11)
+`make eval` fetches the Goldsmith `docflow-invoices` dataset, runs the real pipeline (T3→T10→T5/T10→T6) over every example, and writes `eval_runs/<ts>.json` with metrics by category. Baseline run (`claude-sonnet-4-6`): **N=11** (the export currently has 11 examples vs. the ТЗ §8 target of 40 — expanding it is T12), field accuracy **93.8%**, schema validity **100%**, review-flag rate **12.2%**, false-confidence rate **0.0%** (no field confidently wrong; both misses are safe low-confidence `null` abstentions). Regression gate: exit 1 on a >2pp field-accuracy drop vs. the previous run. See `docs/decisions.md` (Evals T11).
 
 ## UI notes
 - Scanned-document panes always render as light paper, even in dark theme; `color-scheme` is managed explicitly (never left to browser auto-darkening). See `docs/UI_SPEC.md`.

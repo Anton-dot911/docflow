@@ -1,0 +1,771 @@
+{
+  "timestamp": "20260726T160746Z",
+  "dataset": "docflow-invoices",
+  "dataset_version": 1,
+  "n_examples": 11,
+  "models": [
+    "claude-sonnet-4-6"
+  ],
+  "extraction_model": null,
+  "total_cost_usd": "0.38379",
+  "false_confidence_threshold": 0.85,
+  "metrics": {
+    "ALL": {
+      "category": "ALL",
+      "n_docs": 11,
+      "n_comparable_fields": 32,
+      "n_correct": 30,
+      "field_accuracy": 0.9375,
+      "n_extracted": 10,
+      "schema_validity_rate": 1.0,
+      "n_payload_fields": 246,
+      "n_flagged_fields": 30,
+      "review_flag_rate": 0.12195121951219512,
+      "n_false_confidence": 0,
+      "false_confidence_rate": 0.0,
+      "false_confidence_fields": []
+    },
+    "clean": {
+      "category": "clean",
+      "n_docs": 2,
+      "n_comparable_fields": 6,
+      "n_correct": 6,
+      "field_accuracy": 1.0,
+      "n_extracted": 2,
+      "schema_validity_rate": 1.0,
+      "n_payload_fields": 46,
+      "n_flagged_fields": 3,
+      "review_flag_rate": 0.06521739130434782,
+      "n_false_confidence": 0,
+      "false_confidence_rate": 0.0,
+      "false_confidence_fields": []
+    },
+    "multipage": {
+      "category": "multipage",
+      "n_docs": 2,
+      "n_comparable_fields": 6,
+      "n_correct": 6,
+      "field_accuracy": 1.0,
+      "n_extracted": 2,
+      "schema_validity_rate": 1.0,
+      "n_payload_fields": 74,
+      "n_flagged_fields": 5,
+      "review_flag_rate": 0.06756756756756757,
+      "n_false_confidence": 0,
+      "false_confidence_rate": 0.0,
+      "false_confidence_fields": []
+    },
+    "nonstandard_layout": {
+      "category": "nonstandard_layout",
+      "n_docs": 1,
+      "n_comparable_fields": 3,
+      "n_correct": 2,
+      "field_accuracy": 0.6666666666666666,
+      "n_extracted": 1,
+      "schema_validity_rate": 1.0,
+      "n_payload_fields": 19,
+      "n_flagged_fields": 3,
+      "review_flag_rate": 0.15789473684210525,
+      "n_false_confidence": 0,
+      "false_confidence_rate": 0.0,
+      "false_confidence_fields": []
+    },
+    "other": {
+      "category": "other",
+      "n_docs": 1,
+      "n_comparable_fields": 2,
+      "n_correct": 2,
+      "field_accuracy": 1.0,
+      "n_extracted": 0,
+      "schema_validity_rate": null,
+      "n_payload_fields": 0,
+      "n_flagged_fields": 0,
+      "review_flag_rate": null,
+      "n_false_confidence": 0,
+      "false_confidence_rate": 0.0,
+      "false_confidence_fields": []
+    },
+    "photo": {
+      "category": "photo",
+      "n_docs": 1,
+      "n_comparable_fields": 3,
+      "n_correct": 3,
+      "field_accuracy": 1.0,
+      "n_extracted": 1,
+      "schema_validity_rate": 1.0,
+      "n_payload_fields": 19,
+      "n_flagged_fields": 4,
+      "review_flag_rate": 0.21052631578947367,
+      "n_false_confidence": 0,
+      "false_confidence_rate": 0.0,
+      "false_confidence_fields": []
+    },
+    "scan": {
+      "category": "scan",
+      "n_docs": 3,
+      "n_comparable_fields": 9,
+      "n_correct": 9,
+      "field_accuracy": 1.0,
+      "n_extracted": 3,
+      "schema_validity_rate": 1.0,
+      "n_payload_fields": 93,
+      "n_flagged_fields": 5,
+      "review_flag_rate": 0.053763440860215055,
+      "n_false_confidence": 0,
+      "false_confidence_rate": 0.0,
+      "false_confidence_fields": []
+    },
+    "untagged": {
+      "category": "untagged",
+      "n_docs": 1,
+      "n_comparable_fields": 3,
+      "n_correct": 3,
+      "field_accuracy": 1.0,
+      "n_extracted": 1,
+      "schema_validity_rate": 1.0,
+      "n_payload_fields": 31,
+      "n_flagged_fields": 1,
+      "review_flag_rate": 0.03225806451612903,
+      "n_false_confidence": 0,
+      "false_confidence_rate": 0.0,
+      "false_confidence_fields": []
+    },
+    "without_data": {
+      "category": "without_data",
+      "n_docs": 1,
+      "n_comparable_fields": 3,
+      "n_correct": 2,
+      "field_accuracy": 0.6666666666666666,
+      "n_extracted": 1,
+      "schema_validity_rate": 1.0,
+      "n_payload_fields": 11,
+      "n_flagged_fields": 11,
+      "review_flag_rate": 1.0,
+      "n_false_confidence": 0,
+      "false_confidence_rate": 0.0,
+      "false_confidence_fields": []
+    }
+  },
+  "documents": [
+    {
+      "id": "ex_01KYCEAK2RFD2W7V8NSX9QZBWA",
+      "raw_tags": [
+        "without data"
+      ],
+      "categories": [
+        "without_data"
+      ],
+      "doc_type": "invoice",
+      "extracted": true,
+      "schema_valid": true,
+      "classify_confidence": 0.85,
+      "mode": "text",
+      "cost_usd": "0.02389",
+      "latency_ms": 5814,
+      "error": null,
+      "fields": [
+        {
+          "field": "issue_date",
+          "expected": "2026-07-25",
+          "actual": null,
+          "comparable": true,
+          "matched": false,
+          "sentinel_empty": false,
+          "confidence": 0.05,
+          "false_confidence": false
+        },
+        {
+          "field": "total_amount",
+          "expected": 0,
+          "actual": null,
+          "comparable": true,
+          "matched": true,
+          "sentinel_empty": true,
+          "confidence": 0.05,
+          "false_confidence": false
+        },
+        {
+          "field": "invoice_number",
+          "expected": "0",
+          "actual": null,
+          "comparable": true,
+          "matched": true,
+          "sentinel_empty": true,
+          "confidence": 0.05,
+          "false_confidence": false
+        }
+      ]
+    },
+    {
+      "id": "ex_01KYCFDX9T5F0ATSCGZ2CTGM2A",
+      "raw_tags": [
+        "Clean pdf"
+      ],
+      "categories": [
+        "clean"
+      ],
+      "doc_type": "invoice",
+      "extracted": true,
+      "schema_valid": true,
+      "classify_confidence": 0.98,
+      "mode": "text",
+      "cost_usd": "0.03689",
+      "latency_ms": 13109,
+      "error": null,
+      "fields": [
+        {
+          "field": "currency",
+          "expected": "UAH",
+          "actual": null,
+          "comparable": false,
+          "matched": false,
+          "sentinel_empty": false,
+          "confidence": null,
+          "false_confidence": false
+        },
+        {
+          "field": "issue_date",
+          "expected": "2026-04-02",
+          "actual": "2026-04-02",
+          "comparable": true,
+          "matched": true,
+          "sentinel_empty": false,
+          "confidence": 0.99,
+          "false_confidence": false
+        },
+        {
+          "field": "total_amount",
+          "expected": 20121.55,
+          "actual": "20121.55",
+          "comparable": true,
+          "matched": true,
+          "sentinel_empty": false,
+          "confidence": 0.99,
+          "false_confidence": false
+        },
+        {
+          "field": "invoice_number",
+          "expected": "РФ-2026/100",
+          "actual": "РФ-2026/100",
+          "comparable": true,
+          "matched": true,
+          "sentinel_empty": false,
+          "confidence": 0.99,
+          "false_confidence": false
+        }
+      ]
+    },
+    {
+      "id": "ex_01KYCZY8HSC16G0TRGNNA8T168",
+      "raw_tags": [
+        "clean"
+      ],
+      "categories": [
+        "clean"
+      ],
+      "doc_type": "invoice",
+      "extracted": true,
+      "schema_valid": true,
+      "classify_confidence": 0.95,
+      "mode": "text",
+      "cost_usd": "0.03707",
+      "latency_ms": 13389,
+      "error": null,
+      "fields": [
+        {
+          "field": "currency",
+          "expected": "UAH",
+          "actual": null,
+          "comparable": false,
+          "matched": false,
+          "sentinel_empty": false,
+          "confidence": null,
+          "false_confidence": false
+        },
+        {
+          "field": "issue_date",
+          "expected": "2026-07-01",
+          "actual": "2026-07-01",
+          "comparable": true,
+          "matched": true,
+          "sentinel_empty": false,
+          "confidence": 0.99,
+          "false_confidence": false
+        },
+        {
+          "field": "total_amount",
+          "expected": 188524.38,
+          "actual": "188524.38",
+          "comparable": true,
+          "matched": true,
+          "sentinel_empty": false,
+          "confidence": 0.99,
+          "false_confidence": false
+        },
+        {
+          "field": "invoice_number",
+          "expected": "РФ-2026/101",
+          "actual": "РФ-2026/101",
+          "comparable": true,
+          "matched": true,
+          "sentinel_empty": false,
+          "confidence": 0.99,
+          "false_confidence": false
+        }
+      ]
+    },
+    {
+      "id": "ex_01KYD04YM4H7KP972EPMTSPVJN",
+      "raw_tags": [],
+      "categories": [
+        "untagged"
+      ],
+      "doc_type": "invoice",
+      "extracted": true,
+      "schema_valid": true,
+      "classify_confidence": 0.99,
+      "mode": "text",
+      "cost_usd": "0.04228",
+      "latency_ms": 16566,
+      "error": null,
+      "fields": [
+        {
+          "field": "currency",
+          "expected": "UAH",
+          "actual": null,
+          "comparable": false,
+          "matched": false,
+          "sentinel_empty": false,
+          "confidence": null,
+          "false_confidence": false
+        },
+        {
+          "field": "issue_date",
+          "expected": "2026-04-03",
+          "actual": "2026-04-03",
+          "comparable": true,
+          "matched": true,
+          "sentinel_empty": false,
+          "confidence": 0.99,
+          "false_confidence": false
+        },
+        {
+          "field": "total_amount",
+          "expected": 15502.52,
+          "actual": "15502.52",
+          "comparable": true,
+          "matched": true,
+          "sentinel_empty": false,
+          "confidence": 0.99,
+          "false_confidence": false
+        },
+        {
+          "field": "invoice_number",
+          "expected": "РФ-2026/102",
+          "actual": "РФ-2026/102",
+          "comparable": true,
+          "matched": true,
+          "sentinel_empty": false,
+          "confidence": 0.99,
+          "false_confidence": false
+        }
+      ]
+    },
+    {
+      "id": "ex_01KYD0898G7NF28MFC0WWSNRKK",
+      "raw_tags": [
+        "scan",
+        "multipage"
+      ],
+      "categories": [
+        "scan",
+        "multipage"
+      ],
+      "doc_type": "invoice",
+      "extracted": true,
+      "schema_valid": true,
+      "classify_confidence": 0.95,
+      "mode": "text",
+      "cost_usd": "0.05256",
+      "latency_ms": 21941,
+      "error": null,
+      "fields": [
+        {
+          "field": "currency",
+          "expected": "UAH",
+          "actual": null,
+          "comparable": false,
+          "matched": false,
+          "sentinel_empty": false,
+          "confidence": null,
+          "false_confidence": false
+        },
+        {
+          "field": "issue_date",
+          "expected": "2026-06-12",
+          "actual": "2026-06-12",
+          "comparable": true,
+          "matched": true,
+          "sentinel_empty": false,
+          "confidence": 0.99,
+          "false_confidence": false
+        },
+        {
+          "field": "total_amount",
+          "expected": 116751.76,
+          "actual": "116751.76",
+          "comparable": true,
+          "matched": true,
+          "sentinel_empty": false,
+          "confidence": 0.99,
+          "false_confidence": false
+        },
+        {
+          "field": "invoice_number",
+          "expected": "РФ-2026/210",
+          "actual": "РФ-2026/210",
+          "comparable": true,
+          "matched": true,
+          "sentinel_empty": false,
+          "confidence": 0.99,
+          "false_confidence": false
+        }
+      ]
+    },
+    {
+      "id": "ex_01KYD0BVSTZN2SFV904G216P3Y",
+      "raw_tags": [
+        "multipage"
+      ],
+      "categories": [
+        "multipage"
+      ],
+      "doc_type": "invoice",
+      "extracted": true,
+      "schema_valid": true,
+      "classify_confidence": 0.98,
+      "mode": "text",
+      "cost_usd": "0.03919",
+      "latency_ms": 14041,
+      "error": null,
+      "fields": [
+        {
+          "field": "currency",
+          "expected": "UAH",
+          "actual": null,
+          "comparable": false,
+          "matched": false,
+          "sentinel_empty": false,
+          "confidence": null,
+          "false_confidence": false
+        },
+        {
+          "field": "issue_date",
+          "expected": "2026-07-04",
+          "actual": "2026-07-04",
+          "comparable": true,
+          "matched": true,
+          "sentinel_empty": false,
+          "confidence": 0.99,
+          "false_confidence": false
+        },
+        {
+          "field": "total_amount",
+          "expected": 8982.64,
+          "actual": "8982.64",
+          "comparable": true,
+          "matched": true,
+          "sentinel_empty": false,
+          "confidence": 0.0,
+          "false_confidence": false
+        },
+        {
+          "field": "invoice_number",
+          "expected": "РФ-2026/317",
+          "actual": "РФ-2026/317",
+          "comparable": true,
+          "matched": true,
+          "sentinel_empty": false,
+          "confidence": 0.99,
+          "false_confidence": false
+        }
+      ]
+    },
+    {
+      "id": "ex_01KYD109WZCXX6NM44AFNGJZQP",
+      "raw_tags": [
+        "nonstandard"
+      ],
+      "categories": [
+        "nonstandard_layout"
+      ],
+      "doc_type": "invoice",
+      "extracted": true,
+      "schema_valid": true,
+      "classify_confidence": 0.95,
+      "mode": "text",
+      "cost_usd": "0.0335",
+      "latency_ms": 11599,
+      "error": null,
+      "fields": [
+        {
+          "field": "currency",
+          "expected": "UAH",
+          "actual": null,
+          "comparable": false,
+          "matched": false,
+          "sentinel_empty": false,
+          "confidence": null,
+          "false_confidence": false
+        },
+        {
+          "field": "issue_date",
+          "expected": "2026-05-20",
+          "actual": "2026-05-20",
+          "comparable": true,
+          "matched": true,
+          "sentinel_empty": false,
+          "confidence": 0.99,
+          "false_confidence": false
+        },
+        {
+          "field": "total_amount",
+          "expected": 4868.85,
+          "actual": null,
+          "comparable": true,
+          "matched": false,
+          "sentinel_empty": false,
+          "confidence": 0.1,
+          "false_confidence": false
+        },
+        {
+          "field": "invoice_number",
+          "expected": "б/н",
+          "actual": "б/н",
+          "comparable": true,
+          "matched": true,
+          "sentinel_empty": false,
+          "confidence": 0.97,
+          "false_confidence": false
+        }
+      ]
+    },
+    {
+      "id": "ex_01KYDCYV1X3N7CTVNESWZ0QWP9",
+      "raw_tags": [
+        "scangood"
+      ],
+      "categories": [
+        "scan"
+      ],
+      "doc_type": "invoice",
+      "extracted": true,
+      "schema_valid": true,
+      "classify_confidence": 0.95,
+      "mode": "vision",
+      "cost_usd": "0.04067",
+      "latency_ms": 21761,
+      "error": null,
+      "fields": [
+        {
+          "field": "currency",
+          "expected": "UAH",
+          "actual": null,
+          "comparable": false,
+          "matched": false,
+          "sentinel_empty": false,
+          "confidence": null,
+          "false_confidence": false
+        },
+        {
+          "field": "issue_date",
+          "expected": "2026-04-02",
+          "actual": "2026-04-02",
+          "comparable": true,
+          "matched": true,
+          "sentinel_empty": false,
+          "confidence": 0.98,
+          "false_confidence": false
+        },
+        {
+          "field": "total_amount",
+          "expected": 20121.55,
+          "actual": "20121.55",
+          "comparable": true,
+          "matched": true,
+          "sentinel_empty": false,
+          "confidence": 0.98,
+          "false_confidence": false
+        },
+        {
+          "field": "invoice_number",
+          "expected": "РФ-2026/100",
+          "actual": "РФ-2026/100",
+          "comparable": true,
+          "matched": true,
+          "sentinel_empty": false,
+          "confidence": 0.98,
+          "false_confidence": false
+        }
+      ]
+    },
+    {
+      "id": "ex_01KYDD34NJR1F0ME9ZX2RC42PR",
+      "raw_tags": [
+        "scan bad"
+      ],
+      "categories": [
+        "scan"
+      ],
+      "doc_type": "invoice",
+      "extracted": true,
+      "schema_valid": true,
+      "classify_confidence": 0.95,
+      "mode": "vision",
+      "cost_usd": "0.04071",
+      "latency_ms": 18997,
+      "error": null,
+      "fields": [
+        {
+          "field": "currency",
+          "expected": "UAH",
+          "actual": null,
+          "comparable": false,
+          "matched": false,
+          "sentinel_empty": false,
+          "confidence": null,
+          "false_confidence": false
+        },
+        {
+          "field": "issue_date",
+          "expected": "2026-07-01",
+          "actual": "2026-07-01",
+          "comparable": true,
+          "matched": true,
+          "sentinel_empty": false,
+          "confidence": 0.97,
+          "false_confidence": false
+        },
+        {
+          "field": "total_amount",
+          "expected": 188524.38,
+          "actual": "188524.38",
+          "comparable": true,
+          "matched": true,
+          "sentinel_empty": false,
+          "confidence": 0.97,
+          "false_confidence": false
+        },
+        {
+          "field": "invoice_number",
+          "expected": "РФ-2026/101",
+          "actual": "РФ-2026/101",
+          "comparable": true,
+          "matched": true,
+          "sentinel_empty": false,
+          "confidence": 0.97,
+          "false_confidence": false
+        }
+      ]
+    },
+    {
+      "id": "ex_01KYDJRD1WBPGK5PQ6Q7MBYDTB",
+      "raw_tags": [
+        "other letter"
+      ],
+      "categories": [
+        "other"
+      ],
+      "doc_type": "other",
+      "extracted": false,
+      "schema_valid": true,
+      "classify_confidence": 0.92,
+      "mode": "text",
+      "cost_usd": null,
+      "latency_ms": null,
+      "error": null,
+      "fields": [
+        {
+          "field": "total_amount",
+          "expected": 0,
+          "actual": null,
+          "comparable": true,
+          "matched": true,
+          "sentinel_empty": true,
+          "confidence": null,
+          "false_confidence": false
+        },
+        {
+          "field": "invoice_number",
+          "expected": "0",
+          "actual": null,
+          "comparable": true,
+          "matched": true,
+          "sentinel_empty": true,
+          "confidence": null,
+          "false_confidence": false
+        }
+      ]
+    },
+    {
+      "id": "ex_01KYDK0KB0G91NXHS7TXDPS1HN",
+      "raw_tags": [
+        "foto"
+      ],
+      "categories": [
+        "photo"
+      ],
+      "doc_type": "act",
+      "extracted": true,
+      "schema_valid": true,
+      "classify_confidence": 0.95,
+      "mode": "vision",
+      "cost_usd": "0.03703",
+      "latency_ms": 15382,
+      "error": null,
+      "fields": [
+        {
+          "field": "currency",
+          "expected": "UAH",
+          "actual": null,
+          "comparable": false,
+          "matched": false,
+          "sentinel_empty": false,
+          "confidence": null,
+          "false_confidence": false
+        },
+        {
+          "field": "issue_date",
+          "expected": "2026-02-24",
+          "actual": "2026-02-24",
+          "comparable": true,
+          "matched": true,
+          "sentinel_empty": false,
+          "confidence": 0.97,
+          "false_confidence": false
+        },
+        {
+          "field": "total_amount",
+          "expected": 15432.05,
+          "actual": "15432.05",
+          "comparable": true,
+          "matched": true,
+          "sentinel_empty": false,
+          "confidence": 0.97,
+          "false_confidence": false
+        },
+        {
+          "field": "invoice_number",
+          "expected": "АКТ-2026/50",
+          "actual": "АКТ-2026/50",
+          "comparable": true,
+          "matched": true,
+          "sentinel_empty": false,
+          "confidence": 0.97,
+          "false_confidence": false
+        }
+      ]
+    }
+  ],
+  "previous_run": null
+}
